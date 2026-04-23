@@ -3,7 +3,7 @@
 
 
 */
-class Controller_monitors extends Controller_Template { 
+class Controller_events extends Controller { 
 		
 	public $view = 'result';//view для показа результата
 	public $template = 'template';
