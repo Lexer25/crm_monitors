@@ -32,7 +32,8 @@ class Task_EventsInsert extends Minion_Task {
             try {
                 $sql = "INSERT INTO EVENTS (ID_DB, ID_EVENTTYPE, ID_DEV, ID_PLAN, DATETIME, ID_CARD, NOTE, ID_VIDEO, ID_PEP, ESS1, ESS2)
                         VALUES (1, {$type}, NULL, NULL, current_timestamp, NULL, '{$note}', NULL, {$people}, NULL, NULL)";
-                
+       $sql="INSERT INTO events (ID_DB,ID_EVENTTYPE,ID_DEV,ID_PLAN,DATETIME,ID_CARD,NOTE,ID_VIDEO,ID_PEP,ESS1,ESS2)
+       VALUES (1,50,574,NULL,current_timestamp,'1484F8001A','test',NULL,NULL,22877, 1);";         
                 $result = DB::query(Database::INSERT, $sql)
                     ->execute(Database::instance('fb'));
                 

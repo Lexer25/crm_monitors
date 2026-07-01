@@ -7,12 +7,12 @@ class Controller_monitors extends Controller_Template {
 		
 	public $view = 'result';//view для показа результата
 	public $template = 'template';
-	private $session;
+	public $session;
 	
 	public function before()
 	{
 		parent::before();
-		 $this->session = Session::instance();
+		$this->session = Session::instance();
 	}
 
 
