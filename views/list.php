@@ -184,8 +184,8 @@
 //echo Debug::vars('3', $alert); //exit;
 //echo Debug::vars('4', $filter); //exit;
 //echo Debug::vars('5', $pagination); //exit;
-define ('_notAllowed', "HTML::image('images/text_lock.png', array('title' => __('tip.notAllowed'), 'width'=>'32'))");
-include Kohana::find_file('views','alert');
+//define ('_notAllowed', "HTML::image('images/text_lock.png', array('title' => __('tip.notAllowed'), 'width'=>'32'))");
+//include Kohana::find_file('views','alert');
 if ($alert) { ?>
 <div class="alert_success">
 	<p>
