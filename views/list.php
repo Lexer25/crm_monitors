@@ -15,90 +15,119 @@
     var wsConnected = false;
     var wsReconnectAttempts = 0;
     var wsMaxReconnectAttempts = 10;
-    var wsReconnectDelay = 1000; // Начинаем с 1 секунды
-    var wsLastEventId = 0; // Последний полученный ID события
+    var wsReconnectDelay = 1000;
+    var wsLastEventId = 0;
     
     // ==========================================
     // Подключение к WebSocket
     // ==========================================
-    function connectWebSocket() {
-        try {
-            // Определяем URL для WebSocket
-            var wsUrl = 'ws://localhost:8082';
+// ==========================================
+// Подключение к WebSocket
+// ==========================================
+function connectWebSocket() {
+    try {
+        // ВСЕГДА используем ws:// для localhost, даже если сайт на HTTPS
+        var wsUrl = 'ws://localhost:8082';
+        
+        // Если нужно подключение к другому хосту
+        // var hostname = window.location.hostname;
+        // var wsUrl = 'ws://' + hostname + ':8082';
+        
+        console.log('🔄 Подключение к WebSocket: ' + wsUrl);
+        
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = function() {
+            console.log('✅ WebSocket подключен!');
+            wsConnected = true;
+            wsReconnectAttempts = 0;
+            wsReconnectDelay = 1000;
             
-            // Если сайт на HTTPS, используем wss://
-            if (window.location.protocol === 'https:') {
-                wsUrl = 'wss://localhost:8082';
+            if (window.updateInterval) {
+                clearInterval(window.updateInterval);
+                window.updateInterval = null;
+                console.log('🔄 AJAX-интервал отключен (используем WebSocket)');
             }
             
-            console.log('🔄 Подключение к WebSocket: ' + wsUrl);
+            updateWebSocketStatus('✅ WebSocket', '#4CAF50');
             
-            ws = new WebSocket(wsUrl);
-            
-            ws.onopen = function() {
-                console.log('✅ WebSocket подключен!');
-                wsConnected = true;
-                wsReconnectAttempts = 0;
-                wsReconnectDelay = 1000;
-                
-                // Запрашиваем последние события при подключении
-                var lastId = getLastEventId();
-                ws.send(JSON.stringify({
-                    action: 'getEvents',
-                    lastId: lastId,
-                    photo: document.getElementById('photomonitor') ? document.getElementById('photomonitor').checked : false
-                }));
-            };
-            
-            ws.onmessage = function(event) {
-                // Получены данные от сервера
-                if (event.data && event.data !== '') {
-                    // Проверяем, не пришло ли JSON-сообщение с ошибкой
-                    try {
-                        var jsonData = JSON.parse(event.data);
-                        if (jsonData.error) {
-                            console.error('❌ Ошибка от сервера:', jsonData.error);
-                            return;
-                        }
-                    } catch(e) {
-                        // Это не JSON, значит это HTML-строки для таблицы
-                        handleNewEvents(event.data);
+            var lastId = getLastEventId();
+            ws.send(JSON.stringify({
+                action: 'getEvents',
+                lastId: lastId,
+                photo: document.getElementById('photomonitor') ? document.getElementById('photomonitor').checked : false
+            }));
+        };
+        
+        ws.onmessage = function(event) {
+            if (event.data && event.data !== '') {
+                try {
+                    var jsonData = JSON.parse(event.data);
+                    if (jsonData.error) {
+                        console.error('❌ Ошибка от сервера:', jsonData.error);
+                        return;
                     }
+                } catch(e) {
+                    handleNewEvents(event.data);
                 }
-            };
+            }
+        };
+        
+        ws.onclose = function() {
+            console.log('⚠️ WebSocket отключен');
+            wsConnected = false;
+            ws = null;
             
-            ws.onclose = function() {
-                console.log('⚠️ WebSocket отключен');
-                wsConnected = false;
-                ws = null;
+            updateWebSocketStatus('⚠️ Отключен', '#ff9800');
+            enableAjaxFallback();
+            
+            if (wsReconnectAttempts < wsMaxReconnectAttempts) {
+                var delay = Math.min(30000, wsReconnectDelay * Math.pow(2, wsReconnectAttempts));
+                delay = delay * (0.8 + 0.4 * Math.random());
                 
-                // Автоматическое переподключение с экспоненциальной задержкой
-                if (wsReconnectAttempts < wsMaxReconnectAttempts) {
-                    var delay = Math.min(30000, wsReconnectDelay * Math.pow(2, wsReconnectAttempts));
-                    // Добавляем случайность (джиттер)
-                    delay = delay * (0.8 + 0.4 * Math.random());
-                    
-                    wsReconnectAttempts++;
-                    console.log('🔄 Переподключение через ' + Math.round(delay/1000) + ' сек. (попытка ' + wsReconnectAttempts + '/' + wsMaxReconnectAttempts + ')');
-                    
-                    setTimeout(function() {
-                        connectWebSocket();
-                    }, delay);
-                } else {
-                    console.error('❌ Достигнут лимит попыток переподключения. Переключаемся на AJAX...');
-                    // Переключаемся на AJAX как запасной вариант
-                    switchToAjaxMode();
-                }
-            };
-            
-            ws.onerror = function(error) {
-                console.error('❌ Ошибка WebSocket:', error);
-                // ws.onclose вызовется автоматически
-            };
-            
-        } catch(e) {
-            console.error('❌ Ошибка создания WebSocket:', e);
-            switchToAjaxMode();
+                wsReconnectAttempts++;
+                console.log('🔄 Переподключение через ' + Math.round(delay/1000) + ' сек. (попытка ' + wsReconnectAttempts + '/' + wsMaxReconnectAttempts + ')');
+                
+                setTimeout(function() {
+                    connectWebSocket();
+                }, delay);
+            } else {
+                console.error('❌ Достигнут лимит попыток переподключения. Работаем через AJAX.');
+                updateWebSocketStatus('📡 AJAX режим', '#ff5722');
+            }
+        };
+        
+        ws.onerror = function(error) {
+            console.error('❌ Ошибка WebSocket:', error);
+            updateWebSocketStatus('❌ Ошибка', '#f44336');
+        };
+        
+    } catch(e) {
+        console.error('❌ Ошибка создания WebSocket:', e);
+        enableAjaxFallback();
+    }
+}
+    
+    // ==========================================
+    // Включение AJAX как запасного варианта
+    // ==========================================
+    function enableAjaxFallback() {
+        // Включаем AJAX-интервал, только если его нет
+        if (!window.updateInterval) {
+            console.log('🔄 Включаем AJAX-режим (интервал: ' + timeUpdate + ' сек.)');
+            window.updateInterval = setInterval(showUser, timeUpdate * 1000);
+            updateWebSocketStatus('📡 AJAX режим', '#ff5722');
+        }
+    }
+    
+    // ==========================================
+    // Обновление статуса WebSocket
+    // ==========================================
+    function updateWebSocketStatus(text, color) {
+        var statusElement = document.getElementById('websocketStatus');
+        if (statusElement) {
+            statusElement.textContent = text;
+            statusElement.style.color = color;
         }
     }
     
@@ -120,22 +149,20 @@
     // Обработка новых событий
     // ==========================================
     function handleNewEvents(html) {
+		console.log('📨 Получено событие! Длина: ' + html.length);
+    console.log('📄 Содержимое:', html);
         if (!html || html === '') return;
         
-        // Поиск элементов
         var table = document.getElementById('txtHint');
         var select = document.getElementById('selectsSize');
         if (!table || !select) return;
         
-        // Добавить строки к таблице
         table.insertAdjacentHTML('afterbegin', html);
         
-        // Удалить лишние строки
         while (table.rows.length > parseInt(select.value)) {
             table.deleteRow(table.rows.length - 1);
         }
         
-        // Формирование карточки с фото
         var photoneed = document.getElementById('photomonitor') ? document.getElementById('photomonitor').checked : false;
         if (photoneed) {
             for (var i = 0; i < table.rows.length && i < windowsCountsetings; i++) {
@@ -157,16 +184,12 @@
                             device_name ? device_name.innerText : ''
                         );
                     }
-                } catch(e) {
-                    // Игнорируем ошибки при создании модальных окон
-                }
+                } catch(e) {}
             }
         }
         
-        // Обновляем счетчики
         updateCounters();
         
-        // Автоскролл к новым событиям
         var settings = localStorage.getItem('monitorSettings');
         if (settings) {
             try {
@@ -180,7 +203,6 @@
             } catch(e) {}
         }
         
-        // Обновляем последний ID события
         if (table.rows.length > 0) {
             var firstRow = table.rows[0];
             var idCell = firstRow.cells[0];
@@ -191,30 +213,6 @@
     }
     
     // ==========================================
-    // Переключение на AJAX (fallback)
-    // ==========================================
-    function switchToAjaxMode() {
-        console.log('🔄 Переключение на AJAX-режим');
-        if (window.updateInterval) {
-            clearInterval(window.updateInterval);
-        }
-        window.updateInterval = setInterval(showUser, timeUpdate * 1000);
-        document.getElementById('websocketStatus').innerHTML = '📡 AJAX';
-        document.getElementById('websocketStatus').style.color = '#ff9800';
-    }
-    
-    // ==========================================
-    // Отправка события через WebSocket
-    // ==========================================
-    function sendWebSocketMessage(data) {
-        if (ws && wsConnected && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(data));
-            return true;
-        }
-        return false;
-    }
-    
-    // ==========================================
     // Функция обновления монитора (AJAX-режим)
     // ==========================================
     function showUser() {
@@ -222,16 +220,15 @@
         var stopCheck = document.getElementById("updatemonitor");
         if (stopCheck && stopCheck.checked) return;
         
-        // Если WebSocket работает, не используем AJAX
+        // Если WebSocket работает, НЕ используем AJAX
         if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
             return;
         }
         
-        // Формирование GET запроса
+        // AJAX запрос
         var xmlhttp = new XMLHttpRequest();
         var photoneed = document.getElementById("photomonitor") ? document.getElementById("photomonitor").checked : false;
         
-        // Обработка GET запроса
         xmlhttp.onreadystatechange = function() {
             if (this.readyState === 4 && this.status === 200) {
                 handleNewEvents(this.responseText);
@@ -244,10 +241,8 @@
     }
     
     // ==========================================
-    // Остальные функции (без изменений)
+    // Функция создания модального окна настроек
     // ==========================================
-    
-    // Функция для создания модального окна настроек
     function createSettingsModal2() {
         if (document.getElementById('settingsModal')) {
             document.getElementById('settingsModal').style.display = 'block';
@@ -399,6 +394,9 @@
         });
     }
     
+    // ==========================================
+    // Закрытие окна настроек
+    // ==========================================
     function closeSettingsModal() {
         var modal = document.getElementById('settingsModal');
         var overlay = document.getElementById('settingsOverlay');
@@ -406,6 +404,9 @@
         if (overlay) overlay.remove();
     }
     
+    // ==========================================
+    // Сохранение настроек
+    // ==========================================
     function saveSettings() {
         try {
             var interval = parseInt(document.getElementById('settingsUpdateInterval').value);
@@ -445,7 +446,8 @@
                 photoCheck.checked = photoEnabled;
             }
             
-            if (window.updateInterval) {
+            // Перезапускаем AJAX-интервал с новым временем (если он активен)
+            if (window.updateInterval && !wsConnected) {
                 clearInterval(window.updateInterval);
                 window.updateInterval = setInterval(showUser, timeUpdate * 1000);
             }
@@ -458,6 +460,9 @@
         }
     }
     
+    // ==========================================
+    // Показ уведомления
+    // ==========================================
     function showNotification(message, type) {
         var notification = document.createElement('div');
         notification.style.cssText = `
@@ -500,6 +505,9 @@
         }, 3000);
     }
     
+    // ==========================================
+    // Загрузка сохраненных настроек
+    // ==========================================
     function loadSettings() {
         try {
             var saved = localStorage.getItem('monitorSettings');
@@ -527,6 +535,9 @@
         } catch(e) {}
     }
     
+    // ==========================================
+    // Обновление счетчиков
+    // ==========================================
     function updateCounters() {
         var table = document.getElementById("txtHint");
         if (!table) return;
@@ -547,6 +558,9 @@
         }
     }
     
+    // ==========================================
+    // Обновление времени
+    // ==========================================
     function updateTime() {
         var now = new Date();
         var timeString = now.toLocaleTimeString('ru-RU', {
@@ -567,7 +581,7 @@
     }
     
     // ==========================================
-    // Инициализация
+    // Инициализация при загрузке страницы
     // ==========================================
     $(function() {
         // Инициализация tablesorter
@@ -591,11 +605,8 @@
         // Подключение к WebSocket
         connectWebSocket();
         
-        // Запасной AJAX-интервал (на случай, если WebSocket не работает)
-        if (window.updateInterval) {
-            clearInterval(window.updateInterval);
-        }
-        window.updateInterval = setInterval(showUser, timeUpdate * 1000);
+        // НЕ ЗАПУСКАЕМ AJAX-интервал сразу - он включится только при падении WebSocket
+        // window.updateInterval = setInterval(showUser, timeUpdate * 1000); // УБРАЛИ!
         
         // Пробел - остановка событий
         $(document).bind('keypress', function(e) {
@@ -786,10 +797,8 @@
         animation: highlightRow 2s ease;
     }
 
-    /* Статус WebSocket */
     #websocketStatus {
         font-size: 12px;
-        color: #4CAF50;
         padding: 2px 10px;
         border-radius: 10px;
         background: #e8f5e9;

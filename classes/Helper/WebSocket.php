@@ -11,40 +11,45 @@ class Helper_WebSocket
      * @param string $data - данные для отправки
      * @return bool
      */
-    public static function send($data)
-    {
-        try {
-            $config = Kohana::$config->load('monitors');
-            $host = $config->get('websocket.host', '127.0.0.1');
-            $port = $config->get('websocket.port', 8082);
-            $timeout = $config->get('websocket.timeout', 5);
-            
-            $context = stream_context_create();
-            $socket = @stream_socket_client(
-                'tcp://' . $host . ':' . $port,
-                $errno,
-                $errstr,
-                $timeout,
-                STREAM_CLIENT_CONNECT,
-                $context
-            );
-            
-            if (!$socket) {
-                Log::instance()->add(Log::DEBUG, 'Helper_WebSocket: Не удалось подключиться: ' . $errstr);
-                return false;
-            }
-            
-            fwrite($socket, $data);
-            fclose($socket);
-            
-            Log::instance()->add(Log::DEBUG, 'Helper_WebSocket: Данные отправлены, длина: ' . strlen($data));
-            return true;
-            
-        } catch (Exception $e) {
-            Log::instance()->add(Log::ERROR, 'Helper_WebSocket: Ошибка: ' . $e->getMessage());
+public static function send($data)
+{
+    try {
+        $config = Kohana::$config->load('monitors');
+        $host = $config->get('websocket.host', '127.0.0.1');
+        $port = $config->get('websocket.port', 8082);
+        $timeout = $config->get('websocket.timeout', 5);
+        
+        echo "        Connecting to {$host}:{$port}...\n";
+        
+        $context = stream_context_create();
+        $socket = @stream_socket_client(
+            'tcp://' . $host . ':' . $port,
+            $errno,
+            $errstr,
+            $timeout,
+            STREAM_CLIENT_CONNECT,
+            $context
+        );
+        
+        if (!$socket) {
+            echo "        ERROR: {$errstr} ({$errno})\n";
+            Log::instance()->add(Log::ERROR, 'Helper_WebSocket: ' . $errstr);
             return false;
         }
+        
+        echo "        Connected, sending data...\n";
+        fwrite($socket, $data);
+        fclose($socket);
+        
+        echo "        Data sent successfully\n";
+        return true;
+        
+    } catch (Exception $e) {
+        echo "        EXCEPTION: " . $e->getMessage() . "\n";
+        Log::instance()->add(Log::ERROR, 'Helper_WebSocket: ' . $e->getMessage());
+        return false;
     }
+}
     
     /**
      * Отправить JSON-сообщение
