@@ -1,29 +1,265 @@
 <script type="text/javascript" src="js/modal-window.js"></script>
 <script type="text/javascript" src="js/modal-photo.js"></script>
 <script type="text/javascript">
+    // ==========================================
     // Глобальные настройки
-    var timeUpdate = 5; // Интервал обновления в секундах
+    // ==========================================
+    var timeUpdate = 5; // Интервал обновления в секундах (запасной, если WebSocket не работает)
     var windowsCountsetings = 5; // Количество окон с фото
+    var API_BASE_URL = 'monitors/getEvent'; // Fallback URL для AJAX
     
-    // Базовый URL для API запросов
-    var API_BASE_URL = 'monitors/getEvent';
+    // ==========================================
+    // WebSocket настройки
+    // ==========================================
+    var ws = null;
+    var wsConnected = false;
+    var wsReconnectAttempts = 0;
+    var wsMaxReconnectAttempts = 10;
+    var wsReconnectDelay = 1000; // Начинаем с 1 секунды
+    var wsLastEventId = 0; // Последний полученный ID события
+    
+    // ==========================================
+    // Подключение к WebSocket
+    // ==========================================
+    function connectWebSocket() {
+        try {
+            // Определяем URL для WebSocket
+            var wsUrl = 'ws://localhost:8082';
+            
+            // Если сайт на HTTPS, используем wss://
+            if (window.location.protocol === 'https:') {
+                wsUrl = 'wss://localhost:8082';
+            }
+            
+            console.log('🔄 Подключение к WebSocket: ' + wsUrl);
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                console.log('✅ WebSocket подключен!');
+                wsConnected = true;
+                wsReconnectAttempts = 0;
+                wsReconnectDelay = 1000;
+                
+                // Запрашиваем последние события при подключении
+                var lastId = getLastEventId();
+                ws.send(JSON.stringify({
+                    action: 'getEvents',
+                    lastId: lastId,
+                    photo: document.getElementById('photomonitor') ? document.getElementById('photomonitor').checked : false
+                }));
+            };
+            
+            ws.onmessage = function(event) {
+                // Получены данные от сервера
+                if (event.data && event.data !== '') {
+                    // Проверяем, не пришло ли JSON-сообщение с ошибкой
+                    try {
+                        var jsonData = JSON.parse(event.data);
+                        if (jsonData.error) {
+                            console.error('❌ Ошибка от сервера:', jsonData.error);
+                            return;
+                        }
+                    } catch(e) {
+                        // Это не JSON, значит это HTML-строки для таблицы
+                        handleNewEvents(event.data);
+                    }
+                }
+            };
+            
+            ws.onclose = function() {
+                console.log('⚠️ WebSocket отключен');
+                wsConnected = false;
+                ws = null;
+                
+                // Автоматическое переподключение с экспоненциальной задержкой
+                if (wsReconnectAttempts < wsMaxReconnectAttempts) {
+                    var delay = Math.min(30000, wsReconnectDelay * Math.pow(2, wsReconnectAttempts));
+                    // Добавляем случайность (джиттер)
+                    delay = delay * (0.8 + 0.4 * Math.random());
+                    
+                    wsReconnectAttempts++;
+                    console.log('🔄 Переподключение через ' + Math.round(delay/1000) + ' сек. (попытка ' + wsReconnectAttempts + '/' + wsMaxReconnectAttempts + ')');
+                    
+                    setTimeout(function() {
+                        connectWebSocket();
+                    }, delay);
+                } else {
+                    console.error('❌ Достигнут лимит попыток переподключения. Переключаемся на AJAX...');
+                    // Переключаемся на AJAX как запасной вариант
+                    switchToAjaxMode();
+                }
+            };
+            
+            ws.onerror = function(error) {
+                console.error('❌ Ошибка WebSocket:', error);
+                // ws.onclose вызовется автоматически
+            };
+            
+        } catch(e) {
+            console.error('❌ Ошибка создания WebSocket:', e);
+            switchToAjaxMode();
+        }
+    }
+    
+    // ==========================================
+    // Получение последнего ID события из куки
+    // ==========================================
+    function getLastEventId() {
+        var cookies = document.cookie.split(';');
+        for (var i = 0; i < cookies.length; i++) {
+            var cookie = cookies[i].trim();
+            if (cookie.indexOf('id=') === 0) {
+                return parseInt(cookie.substring(3)) || 0;
+            }
+        }
+        return 0;
+    }
+    
+    // ==========================================
+    // Обработка новых событий
+    // ==========================================
+    function handleNewEvents(html) {
+        if (!html || html === '') return;
+        
+        // Поиск элементов
+        var table = document.getElementById('txtHint');
+        var select = document.getElementById('selectsSize');
+        if (!table || !select) return;
+        
+        // Добавить строки к таблице
+        table.insertAdjacentHTML('afterbegin', html);
+        
+        // Удалить лишние строки
+        while (table.rows.length > parseInt(select.value)) {
+            table.deleteRow(table.rows.length - 1);
+        }
+        
+        // Формирование карточки с фото
+        var photoneed = document.getElementById('photomonitor') ? document.getElementById('photomonitor').checked : false;
+        if (photoneed) {
+            for (var i = 0; i < table.rows.length && i < windowsCountsetings; i++) {
+                try {
+                    var photo = table.rows[i].cells.namedItem('photo');
+                    var even_name = table.rows[i].cells.namedItem('even_name');
+                    var people_name = table.rows[i].cells.namedItem('people_name');
+                    var org_name = table.rows[i].cells.namedItem('org_name');
+                    var people_post = table.rows[i].cells.namedItem('people_post');
+                    var device_name = table.rows[i].cells.namedItem('device_name');
+                    
+                    if (photo && typeof createModal === 'function') {
+                        createModal(
+                            even_name ? even_name.innerText : '',
+                            photo.innerText,
+                            people_name ? people_name.innerText : '',
+                            org_name ? org_name.innerText : '',
+                            people_post ? people_post.innerText : '',
+                            device_name ? device_name.innerText : ''
+                        );
+                    }
+                } catch(e) {
+                    // Игнорируем ошибки при создании модальных окон
+                }
+            }
+        }
+        
+        // Обновляем счетчики
+        updateCounters();
+        
+        // Автоскролл к новым событиям
+        var settings = localStorage.getItem('monitorSettings');
+        if (settings) {
+            try {
+                var parsed = JSON.parse(settings);
+                if (parsed.autoScroll !== false) {
+                    var container = document.getElementById('myTableContainer');
+                    if (container) {
+                        container.scrollTop = 0;
+                    }
+                }
+            } catch(e) {}
+        }
+        
+        // Обновляем последний ID события
+        if (table.rows.length > 0) {
+            var firstRow = table.rows[0];
+            var idCell = firstRow.cells[0];
+            if (idCell) {
+                wsLastEventId = parseInt(idCell.innerText) || 0;
+            }
+        }
+    }
+    
+    // ==========================================
+    // Переключение на AJAX (fallback)
+    // ==========================================
+    function switchToAjaxMode() {
+        console.log('🔄 Переключение на AJAX-режим');
+        if (window.updateInterval) {
+            clearInterval(window.updateInterval);
+        }
+        window.updateInterval = setInterval(showUser, timeUpdate * 1000);
+        document.getElementById('websocketStatus').innerHTML = '📡 AJAX';
+        document.getElementById('websocketStatus').style.color = '#ff9800';
+    }
+    
+    // ==========================================
+    // Отправка события через WebSocket
+    // ==========================================
+    function sendWebSocketMessage(data) {
+        if (ws && wsConnected && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(data));
+            return true;
+        }
+        return false;
+    }
+    
+    // ==========================================
+    // Функция обновления монитора (AJAX-режим)
+    // ==========================================
+    function showUser() {
+        // Проверка кнопки остановки событий
+        var stopCheck = document.getElementById("updatemonitor");
+        if (stopCheck && stopCheck.checked) return;
+        
+        // Если WebSocket работает, не используем AJAX
+        if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+            return;
+        }
+        
+        // Формирование GET запроса
+        var xmlhttp = new XMLHttpRequest();
+        var photoneed = document.getElementById("photomonitor") ? document.getElementById("photomonitor").checked : false;
+        
+        // Обработка GET запроса
+        xmlhttp.onreadystatechange = function() {
+            if (this.readyState === 4 && this.status === 200) {
+                handleNewEvents(this.responseText);
+            }
+        };
+        
+        var url = API_BASE_URL + '?photo=' + photoneed;
+        xmlhttp.open("GET", url, true);
+        xmlhttp.send();
+    }
+    
+    // ==========================================
+    // Остальные функции (без изменений)
+    // ==========================================
     
     // Функция для создания модального окна настроек
     function createSettingsModal2() {
-        // Проверяем, не открыто ли уже окно
         if (document.getElementById('settingsModal')) {
             document.getElementById('settingsModal').style.display = 'block';
             document.getElementById('settingsOverlay').style.display = 'block';
             return;
         }
         
-        // Получаем текущие значения
         var currentSelect = document.getElementById('selectsSize');
         var currentSelectValue = currentSelect ? currentSelect.value : 20;
         var currentTimeUpdate = window.timeUpdate || 5;
         var currentPhotoCheck = document.getElementById('photomonitor') ? document.getElementById('photomonitor').checked : true;
         
-        // Создаем затемнение фона
         var overlay = document.createElement('div');
         overlay.id = 'settingsOverlay';
         overlay.style.cssText = `
@@ -39,7 +275,6 @@
             closeSettingsModal();
         };
         
-        // Создаем модальное окно
         var modal = document.createElement('div');
         modal.id = 'settingsModal';
         modal.style.cssText = `
@@ -157,7 +392,6 @@
         document.body.appendChild(overlay);
         document.body.appendChild(modal);
         
-        // Добавляем возможность закрытия по Escape
         document.addEventListener('keydown', function(e) {
             if (e.key === 'Escape') {
                 closeSettingsModal();
@@ -165,7 +399,6 @@
         });
     }
     
-    // Функция закрытия окна настроек
     function closeSettingsModal() {
         var modal = document.getElementById('settingsModal');
         var overlay = document.getElementById('settingsOverlay');
@@ -173,17 +406,14 @@
         if (overlay) overlay.remove();
     }
     
-    // Функция сохранения настроек
     function saveSettings() {
         try {
-            // Получаем значения
             var interval = parseInt(document.getElementById('settingsUpdateInterval').value);
             var rowCount = parseInt(document.getElementById('settingsRowCount').value);
             var windowsCount = parseInt(document.getElementById('settingsWindowsCount').value);
             var photoEnabled = document.getElementById('settingsPhotoEnabled').checked;
             var autoScroll = document.getElementById('settingsAutoScroll').checked;
             
-            // Валидация
             if (interval < 1 || interval > 60) {
                 alert('Интервал должен быть от 1 до 60 секунд!');
                 return;
@@ -193,7 +423,6 @@
                 return;
             }
             
-            // Сохраняем в localStorage
             var settings = {
                 interval: interval,
                 rowCount: rowCount,
@@ -203,32 +432,25 @@
             };
             localStorage.setItem('monitorSettings', JSON.stringify(settings));
             
-            // Применяем настройки
             window.timeUpdate = interval;
             window.windowsCountsetings = windowsCount;
             
-            // Обновляем select
             var select = document.getElementById('selectsSize');
             if (select) {
                 select.value = rowCount;
             }
             
-            // Обновляем чекбокс фото
             var photoCheck = document.getElementById('photomonitor');
             if (photoCheck) {
                 photoCheck.checked = photoEnabled;
             }
             
-            // Перезапускаем интервал обновления
             if (window.updateInterval) {
                 clearInterval(window.updateInterval);
                 window.updateInterval = setInterval(showUser, timeUpdate * 1000);
             }
             
-            // Показываем уведомление
             showNotification('Настройки успешно сохранены!');
-            
-            // Закрываем окно
             closeSettingsModal();
             
         } catch(e) {
@@ -236,7 +458,6 @@
         }
     }
     
-    // Функция показа уведомления
     function showNotification(message, type) {
         var notification = document.createElement('div');
         notification.style.cssText = `
@@ -255,35 +476,21 @@
         `;
         notification.textContent = message;
         
-        // Добавляем стили анимации
         var style = document.createElement('style');
         style.textContent = `
             @keyframes slideIn {
-                from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
             }
             @keyframes slideOut {
-                from {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-                to {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
             }
         `;
         document.head.appendChild(style);
         
         document.body.appendChild(notification);
         
-        // Автоматическое удаление через 3 секунды
         setTimeout(function() {
             notification.style.animation = 'slideOut 0.5s ease';
             setTimeout(function() {
@@ -293,7 +500,6 @@
         }, 3000);
     }
     
-    // Загрузка сохраненных настроек
     function loadSettings() {
         try {
             var saved = localStorage.getItem('monitorSettings');
@@ -317,97 +523,10 @@
                         photoCheck.checked = settings.photoEnabled;
                     }
                 }
-                // Автоскролл пока не реализован
             }
-        } catch(e) {
-            // Используем значения по умолчанию
-        }
+        } catch(e) {}
     }
     
-    // Функция обновления монитора событий
-    function showUser() {
-        // Проверка кнопки остановки событий
-        var stopCheck = document.getElementById("updatemonitor");
-        if (stopCheck && stopCheck.checked) return;
-        
-        // Формирование GET запроса
-        var xmlhttp = new XMLHttpRequest();
-        var photoneed = document.getElementById("photomonitor") ? document.getElementById("photomonitor").checked : false;
-        
-        // Обработка GET запроса
-        xmlhttp.onreadystatechange = function() {
-            // Проверка на наличие событий
-            if (this.readyState === 4 && this.status === 200) {
-                if (this.responseText == '') return;
-                
-                // Поиск элементов
-                var table = document.getElementById("txtHint");
-                var select = document.getElementById("selectsSize");
-                if (!table || !select) return;
-                
-                // Добавить строки к таблице
-                table.insertAdjacentHTML('afterbegin', this.responseText);
-                
-                // Удалить строки из таблицы
-                while (table.rows.length > parseInt(select.value)) {
-                    table.deleteRow(table.rows.length - 1);
-                }
-                
-                // Формирование карточки с фото
-                if (photoneed) {
-                    for (let i = 0; i < table.rows.length && i < windowsCountsetings; i++) {
-                        try {
-                            var photo = table.rows[i].cells.namedItem('photo');
-                            var even_name = table.rows[i].cells.namedItem('even_name');
-                            var people_name = table.rows[i].cells.namedItem('people_name');
-                            var org_name = table.rows[i].cells.namedItem('org_name');
-                            var people_post = table.rows[i].cells.namedItem('people_post');
-                            var device_name = table.rows[i].cells.namedItem('device_name');
-                            
-                            if (photo && typeof createModal === 'function') {
-                                createModal(
-                                    even_name ? even_name.innerText : '',
-                                    photo.innerText,
-                                    people_name ? people_name.innerText : '',
-                                    org_name ? org_name.innerText : '',
-                                    people_post ? people_post.innerText : '',
-                                    device_name ? device_name.innerText : ''
-                                );
-                            }
-                        } catch(e) {
-                            // Игнорируем ошибки при создании модальных окон
-                        }
-                    }
-                }
-                
-                // Обновляем счетчики
-                updateCounters();
-                
-                // Автоскролл к новым событиям
-                var settings = localStorage.getItem('monitorSettings');
-                if (settings) {
-                    try {
-                        var parsed = JSON.parse(settings);
-                        if (parsed.autoScroll !== false) {
-                            var container = document.getElementById('myTableContainer');
-                            if (container) {
-                                container.scrollTop = 0;
-                            }
-                        }
-                    } catch(e) {}
-                }
-            }
-        };
-        
-        // Формируем URL с правильным путем
-        var url = API_BASE_URL + '?photo=' + photoneed;
-        
-        // GET запрос
-        xmlhttp.open("GET", url, true);
-        xmlhttp.send();
-    }
-    
-    // Функция обновления счетчиков
     function updateCounters() {
         var table = document.getElementById("txtHint");
         if (!table) return;
@@ -428,7 +547,6 @@
         }
     }
     
-    // Функция обновления времени
     function updateTime() {
         var now = new Date();
         var timeString = now.toLocaleTimeString('ru-RU', {
@@ -448,7 +566,9 @@
         }
     }
     
-    // Инициализация при загрузке страницы
+    // ==========================================
+    // Инициализация
+    // ==========================================
     $(function() {
         // Инициализация tablesorter
         try {
@@ -456,9 +576,7 @@
                 headers: { 7: {sorter: false}},  
                 widgets: ['zebra']
             });
-        } catch(e) {
-            // Tablesorter может быть не загружен
-        }
+        } catch(e) {}
         
         // Загрузка сохраненных настроек
         loadSettings();
@@ -470,7 +588,10 @@
         // Обновление счетчиков
         setTimeout(updateCounters, 1000);
         
-        // Запуск интервала обновления
+        // Подключение к WebSocket
+        connectWebSocket();
+        
+        // Запасной AJAX-интервал (на случай, если WebSocket не работает)
         if (window.updateInterval) {
             clearInterval(window.updateInterval);
         }
@@ -500,7 +621,6 @@
         
         // Отслеживание изменения чекбокса фото
         $('#photomonitor').change(function() {
-            // Сохраняем настройку
             try {
                 var saved = localStorage.getItem('monitorSettings');
                 if (saved) {
@@ -512,18 +632,19 @@
         });
     });
 </script>
+
 <style>
     body {
         margin: 0;
         font-family: Arial, sans-serif;
         display: flex;
         flex-direction: column;
-        height: 100vh; /* Занимаем 100% высоты окна браузера */
+        height: 100vh;
     }
 
     #myTableContainer {
-        flex: 1; /* Занимаем оставшееся пространство, необходимое для таблицы */
-        overflow: auto; /* Добавляем полосы прокрутки, если содержимое больше экрана */
+        flex: 1;
+        overflow: auto;
         margin-bottom: 40px; 
     }
 
@@ -538,7 +659,7 @@
         padding: 8px;
         text-align: left;
         position: relative;
-        transition: background-color 0.3s; /* Анимация перехода цвета */
+        transition: background-color 0.3s;
     }
 
     th {
@@ -546,7 +667,7 @@
     }
 
     tr:hover {
-        background-color: #f5f5f5; /* Цвет подсветки при наведении */
+        background-color: #f5f5f5;
     }
 
     .tooltip .tooltiptext {
@@ -571,7 +692,6 @@
         opacity: 1;
     }
 
-    /* Новые стили для строки с дополнительной информацией */
     #additionalInfo {
         padding: 10px;
         position: fixed;
@@ -592,7 +712,7 @@
 
     #currentTime, #eventCounter, #visibleEventCount {
         font-size: 14px;
-        color: #333; /* Цвет текста */
+        color: #333;
         white-space: nowrap;
     }
     
@@ -646,7 +766,6 @@
         background-color: #ccc;
     }
     
-    /* Дополнительные стили для улучшения интерфейса */
     .content {
         flex: 1;
         overflow: hidden;
@@ -658,7 +777,6 @@
         position: relative;
     }
     
-    /* Анимация для новых строк */
     @keyframes highlightRow {
         0% { background-color: #ffff99; }
         100% { background-color: transparent; }
@@ -667,20 +785,20 @@
     #txtHint tr:first-child {
         animation: highlightRow 2s ease;
     }
+
+    /* Статус WebSocket */
+    #websocketStatus {
+        font-size: 12px;
+        color: #4CAF50;
+        padding: 2px 10px;
+        border-radius: 10px;
+        background: #e8f5e9;
+        border: 1px solid #4CAF50;
+        display: inline-block;
+    }
 </style>
+
 <?php 
-//https://webformyself.com/sortirovka-tablic-pri-pomoshhi-plagina-tablesorter-js/?ysclid=lrgdz4nrzp693511651
-// список идентификаторов
-//echo Debug::vars('2', $cards); //exit;
-//echo Debug::vars('2-2', $cardsList); //exit;
-//echo Debug::vars('16', array_diff($cards, $cardsList));//exit;
-//echo Debug::vars('12', $cardsList); //exit;
-//echo Debug::vars('2', $catdTypelist); //exit;
-//echo Debug::vars('3', $alert); //exit;
-//echo Debug::vars('4', $filter); //exit;
-//echo Debug::vars('5', $pagination); //exit;
-//define ('_notAllowed', "HTML::image('images/text_lock.png', array('title' => __('tip.notAllowed'), 'width'=>'32'))");
-//include Kohana::find_file('views','alert');
 if ($alert) { ?>
 <div class="alert_success">
     <p>
@@ -689,11 +807,11 @@ if ($alert) { ?>
     </p>
 </div>
 <?php } ?>
+
 <div class="onecolumn">
     <div class="header">
         <div id="search"<?php if (isset($hidesearch)) echo ' style="display: none;"'; ?>>
             <form action="cards/search_any" method="post">
-            
                 <input type="text" class="search noshadow" title="<?php echo __('search'); ?>" name="q" id="q" value="<?php if (isset($filter)) echo $filter; ?>" />
             </form>
         </div>
@@ -712,33 +830,43 @@ if ($alert) { ?>
     </div>
     <br class="clear"/>
     <div class="content">
-    Количество Событий: 
-        <select id="selectsSize">
+        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; padding: 5px 0;">
+            <span>Количество Событий:</span>
+            <select id="selectsSize">
                 <option value=10>10</option>
                 <option value=20 selected="selected">20</option>
                 <option value=30>30</option>
                 <option value=50>50</option>
                 <option value=100>100</option>
-        </select>
-    <button onclick="createSettingsModal2()" style="
-        background: #4a90d9;
-        color: white;
-        border: none;
-        padding: 5px 15px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-weight: bold;
-        transition: background 0.3s;
-    " onmouseover="this.style.background='#357abd'" onmouseout="this.style.background='#4a90d9'">
-        ⚙️ Настройки
-    </button>
-    Остановить:
-    <input type="checkbox" id="updatemonitor" title="Нажмите Пробел для остановки/запуска"/>
-    Фотографии:
-    <input type="checkbox" id="photomonitor" checked />
+            </select>
+            
+            <button onclick="createSettingsModal2()" style="
+                background: #4a90d9;
+                color: white;
+                border: none;
+                padding: 5px 15px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+                transition: background 0.3s;
+            " onmouseover="this.style.background='#357abd'" onmouseout="this.style.background='#4a90d9'">
+                ⚙️ Настройки
+            </button>
+            
+            <span>Остановить:</span>
+            <input type="checkbox" id="updatemonitor" title="Нажмите Пробел для остановки/запуска"/>
+            
+            <span>Фотографии:</span>
+            <input type="checkbox" id="photomonitor" checked />
+
+            <span style="margin-left: auto;">
+                Статус: <span id="websocketStatus">🔄 Подключение...</span>
+            </span>
+        </div>
+        
         <form id="form_data" name="form_data" action="" method="post">
             <table class="data tablesorter-blue" width="100%" cellpadding="0" cellspacing="0" id="tablesorter">
-            <thead>
+                <thead>
                     <tr>
                         <th>ID_EVENT</th>
                         <th>ID_EVENTTYPE</th>
@@ -748,16 +876,17 @@ if ($alert) { ?>
                         <th>PEOPLE_NAME</th>
                         <th>ORGANIZATION_NAME</th>
                     </tr>
-            </thead>     
-            <tbody id="txtHint"/>
+                </thead>     
+                <tbody id="txtHint"></tbody>
             </table>
 
             <div id="chart_wrapper" class="chart_wrapper"></div>
         
-                <div id="additionalInfo">
-    <div id="currentTime"></div>
-    <div id="eventCounter"></div>
-    <div id="visibleEventCount"></div>
-</div>
+            <div id="additionalInfo">
+                <div id="currentTime"></div>
+                <div id="eventCounter"></div>
+                <div id="visibleEventCount"></div>
+            </div>
+        </form>
     </div>
 </div>
