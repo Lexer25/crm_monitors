@@ -6,7 +6,7 @@
     var windowsCountsetings = 5; // Количество окон с фото
     
     // Базовый URL для API запросов
-    var API_BASE_URL = '/city/events/getEvent';
+    var API_BASE_URL = 'monitors/getEvent';
     
     // Функция для создания модального окна настроек
     function createSettingsModal2() {

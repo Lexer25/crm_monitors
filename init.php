@@ -1,8 +1,5 @@
 <?php
-defined('MONITORS_VERSION') OR define('MONITORS_VERSION', '1.0.1');
-
-
-https://github.com/Lexer25/crm_monitors.git
+defined('MONITORS_VERSION') OR define('MONITORS_VERSION', '1.0.3');
 
 Kohana::$config->load('menu')
     ->set('monitors', array(
@@ -11,9 +8,7 @@ Kohana::$config->load('menu')
         'icon' => 'fa-cog',
         'order' => 3,
     ));
-	
-	
-	
+
 // Маршруты для монитора событий
 Route::set('monitors_api', 'monitors/getEvent', array())
     ->defaults(array(
