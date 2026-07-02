@@ -50,8 +50,8 @@ class Model_MonitorM extends Model
         WHERE e.id_event > '.$id.'
         ORDER BY e.id_event DESC';
 		
- Kohana::$log->add(Log::DEBUG, '52 id='.$id);  
- Kohana::$log->add(Log::DEBUG, '53 sql '.$sql);  
+ //Kohana::$log->add(Log::DEBUG, '52 id='.$id);  
+ //Kohana::$log->add(Log::DEBUG, '53 sql '.$sql);  
  
         $query = DB::query(Database::SELECT, $sql)
             ->parameters(array(':id' => (int)$id))
