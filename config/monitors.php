@@ -5,6 +5,7 @@ return array(
         'host' => '127.0.0.1',
         'port' => 8082,
         'timeout' => 5,
+        'enabled' => false, // ← false = AJAX, true = WebSocket
     ),
     'events' => array(
         'limit' => 30,

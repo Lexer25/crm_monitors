@@ -7,7 +7,7 @@
     var timeUpdate = 5; // Интервал обновления в секундах (запасной, если WebSocket не работает)
     var windowsCountsetings = 5; // Количество окон с фото
     var API_BASE_URL = 'monitors/getEvent'; // Fallback URL для AJAX
-    
+    var wsEnabled = <?php echo $ws_enabled ? 'true' : 'false'; ?>;
     // ==========================================
     // WebSocket настройки
     // ==========================================
@@ -199,7 +199,7 @@
             clearInterval(window.updateInterval);
         }
         window.updateInterval = setInterval(showUser, timeUpdate * 1000);
-        document.getElementById('websocketStatus').innerHTML = '📡 AJAX';
+        document.getElementById('websocketStatus').innerHTML = '<?php echo __('monitor.ajax'); ?>';
         document.getElementById('websocketStatus').style.color = '#ff9800';
     }
     
@@ -295,7 +295,7 @@
         
         modal.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #4a90d9; padding-bottom: 10px;">
-                <h3 style="margin: 0; color: #333; font-size: 18px;">⚙️ Настройки монитора</h3>
+                <h3 style="margin: 0; color: #333; font-size: 18px;">⚙️ <?php echo __('monitor.settings_title'); ?></h3>
                 <button onclick="closeSettingsModal()" style="
                     background: #ff4444;
                     color: white;
@@ -312,18 +312,18 @@
             
             <div style="margin: 15px 0;">
                 <label style="display: block; margin-bottom: 5px; color: #555; font-weight: bold;">
-                    Интервал обновления (сек):
+                    <?php echo __('monitor.update_interval'); ?>:
                 </label>
                 <input type="number" id="settingsUpdateInterval" 
                     value="${currentTimeUpdate}" 
                     min="1" max="60" 
                     style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
-                <small style="color: #888;">Рекомендуется: 3-10 секунд</small>
+                <small style="color: #888;"><?php echo __('monitor.recommended'); ?></small>
             </div>
             
             <div style="margin: 15px 0;">
                 <label style="display: block; margin-bottom: 5px; color: #555; font-weight: bold;">
-                    Количество отображаемых строк:
+                    <?php echo __('monitor.rows_count'); ?>:
                 </label>
                 <select id="settingsRowCount" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
                     <option value="10" ${currentSelectValue == 10 ? 'selected' : ''}>10</option>
@@ -336,26 +336,26 @@
             
             <div style="margin: 15px 0;">
                 <label style="display: block; margin-bottom: 5px; color: #555; font-weight: bold;">
-                    Количество окон с фото:
+                    <?php echo __('monitor.windows_count'); ?>:
                 </label>
                 <input type="number" id="settingsWindowsCount" 
                     value="${windowsCountsetings}" 
                     min="1" max="20" 
                     style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
-                <small style="color: #888;">Максимум 20 окон</small>
+                <small style="color: #888;"><?php echo __('monitor.max_windows'); ?></small>
             </div>
             
             <div style="margin: 15px 0;">
                 <label style="display: flex; align-items: center; color: #555; cursor: pointer;">
                     <input type="checkbox" id="settingsPhotoEnabled" ${currentPhotoCheck ? 'checked' : ''} style="margin-right: 10px;">
-                    Показывать фотографии
+                    <?php echo __('monitor.show_photos'); ?>
                 </label>
             </div>
             
             <div style="margin: 15px 0;">
                 <label style="display: flex; align-items: center; color: #555; cursor: pointer;">
                     <input type="checkbox" id="settingsAutoScroll" checked style="margin-right: 10px;">
-                    Автоматическая прокрутка к новым событиям
+                    <?php echo __('monitor.auto_scroll'); ?>
                 </label>
             </div>
             
@@ -372,7 +372,7 @@
                     transition: all 0.3s;
                     margin-right: 10px;
                 " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    💾 Сохранить
+                    💾 <?php echo __('monitor.save'); ?>
                 </button>
                 <button onclick="closeSettingsModal()" style="
                     background: #ccc;
@@ -384,7 +384,7 @@
                     font-size: 14px;
                     transition: all 0.3s;
                 " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    ❌ Отмена
+                    ❌ <?php echo __('monitor.cancel'); ?>
                 </button>
             </div>
         `;
@@ -415,11 +415,11 @@
             var autoScroll = document.getElementById('settingsAutoScroll').checked;
             
             if (interval < 1 || interval > 60) {
-                alert('Интервал должен быть от 1 до 60 секунд!');
+                alert('<?php echo __('monitor.error_interval'); ?>');
                 return;
             }
             if (windowsCount < 1 || windowsCount > 20) {
-                alert('Количество окон должно быть от 1 до 20!');
+                alert('<?php echo __('monitor.error_windows'); ?>');
                 return;
             }
             
@@ -450,7 +450,7 @@
                 window.updateInterval = setInterval(showUser, timeUpdate * 1000);
             }
             
-            showNotification('Настройки успешно сохранены!');
+            showNotification('<?php echo __('monitor.settings_saved'); ?>');
             closeSettingsModal();
             
         } catch(e) {
@@ -535,14 +535,14 @@
         
         var counterElement = document.getElementById("eventCounter");
         if (counterElement) {
-            counterElement.textContent = 'Всего событий: ' + totalEvents;
+            counterElement.textContent = '<?php echo __('monitor.event_counter'); ?>: ' + totalEvents;
         }
         
         var visibleElement = document.getElementById("visibleEventCount");
         if (visibleElement) {
             var select = document.getElementById("selectsSize");
             if (select) {
-                visibleElement.textContent = 'Отображается: ' + Math.min(totalEvents, parseInt(select.value));
+                visibleElement.textContent = '<?php echo __('monitor.visible_count'); ?>: ' + Math.min(totalEvents, parseInt(select.value));
             }
         }
     }
@@ -589,14 +589,20 @@
         setTimeout(updateCounters, 1000);
         
         // Подключение к WebSocket
-        connectWebSocket();
+         if (wsEnabled) {
+				// WebSocket включен
+				connectWebSocket();
+			} else {
+				// Используем только AJAX
+				document.getElementById('websocketStatus').innerHTML = '📡 AJAX';
+				document.getElementById('websocketStatus').style.color = '#ff9800';
+			}
         
-        // Запасной AJAX-интервал (на случай, если WebSocket не работает)
-        if (window.updateInterval) {
-            clearInterval(window.updateInterval);
-        }
-        window.updateInterval = setInterval(showUser, timeUpdate * 1000);
-        
+     // AJAX интервал всегда работает (как fallback)
+    if (window.updateInterval) {
+        clearInterval(window.updateInterval);
+    }
+    window.updateInterval = setInterval(showUser, timeUpdate * 1000);
         // Пробел - остановка событий
         $(document).bind('keypress', function(e) {
             if (e.keyCode == 32) {
@@ -831,7 +837,7 @@ if ($alert) { ?>
     <br class="clear"/>
     <div class="content">
         <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; padding: 5px 0;">
-            <span>Количество Событий:</span>
+            <span><?php echo __('monitor.rows_count'); ?>:</span>
             <select id="selectsSize">
                 <option value=10>10</option>
                 <option value=20 selected="selected">20</option>
@@ -850,17 +856,17 @@ if ($alert) { ?>
                 font-weight: bold;
                 transition: background 0.3s;
             " onmouseover="this.style.background='#357abd'" onmouseout="this.style.background='#4a90d9'">
-                ⚙️ Настройки
+                ⚙️ <?php echo __('monitor.settings'); ?>
             </button>
             
-            <span>Остановить:</span>
-            <input type="checkbox" id="updatemonitor" title="Нажмите Пробел для остановки/запуска"/>
+            <span><?php echo __('monitor.stop'); ?>:</span>
+            <input type="checkbox" id="updatemonitor" title="<?php echo __('monitor.stop'); ?>"/>
             
-            <span>Фотографии:</span>
+            <span><?php echo __('monitor.photos'); ?>:</span>
             <input type="checkbox" id="photomonitor" checked />
 
             <span style="margin-left: auto;">
-                Статус: <span id="websocketStatus">🔄 Подключение...</span>
+                <?php echo __('monitor.status'); ?>: <span id="websocketStatus"><?php echo __('monitor.connecting'); ?></span>
             </span>
         </div>
         
@@ -868,13 +874,13 @@ if ($alert) { ?>
             <table class="data tablesorter-blue" width="100%" cellpadding="0" cellspacing="0" id="tablesorter">
                 <thead>
                     <tr>
-                        <th>ID_EVENT</th>
-                        <th>ID_EVENTTYPE</th>
-                        <th>DATETIME</th>
-                        <th>EVENTTYPE_NAME</th>
-                        <th>DEVICE_NAME</th>
-                        <th>PEOPLE_NAME</th>
-                        <th>ORGANIZATION_NAME</th>
+                        <th><?php echo __('monitor.id_event'); ?></th>
+                        <th><?php echo __('monitor.id_eventtype'); ?></th>
+                        <th><?php echo __('monitor.datetime'); ?></th>
+                        <th><?php echo __('monitor.eventtype_name'); ?></th>
+                        <th><?php echo __('monitor.device_name'); ?></th>
+                        <th><?php echo __('monitor.people_name'); ?></th>
+                        <th><?php echo __('monitor.organization_name'); ?></th>
                     </tr>
                 </thead>     
                 <tbody id="txtHint"></tbody>

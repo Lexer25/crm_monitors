@@ -47,9 +47,12 @@ class Model_MonitorM extends Model
         JOIN eventtype et ON et.id_eventtype = e.id_eventtype
         LEFT JOIN people p ON p.id_pep = e.ess1
         LEFT JOIN organization o ON o.id_org = e.ess2
-        WHERE e.id_event > :id
+        WHERE e.id_event > '.$id.'
         ORDER BY e.id_event DESC';
-        
+		
+ Kohana::$log->add(Log::DEBUG, '52 id='.$id);  
+ Kohana::$log->add(Log::DEBUG, '53 sql '.$sql);  
+ 
         $query = DB::query(Database::SELECT, $sql)
             ->parameters(array(':id' => (int)$id))
             ->execute(Database::instance('fb'))

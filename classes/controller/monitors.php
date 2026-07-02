@@ -15,21 +15,30 @@ class Controller_monitors extends Controller_Template {
      * Главная страница монитора
      * URL: /monitors
      */
-    public function action_index()
-    {
-        $fl = $this->session->get('alert');
-        $this->session->delete('alert');
-        
-        // Проверяем доступность WebSocket
-        $wsAvailable = false;
-        if (class_exists('Helper_WebSocket')) {
-            $wsAvailable = Helper_WebSocket::isAvailable();
-        }
-        
-        $this->template->content = View::factory('list')
-            ->bind('alert', $fl)
-            ->bind('ws_available', $wsAvailable);
-    }
+	// В monitors/classes/controller/monitors.php
+	public function action_index()
+	{
+		$fl = $this->session->get('alert');
+		$this->session->delete('alert');
+		
+		// Получаем конфиг как массив
+		$config = Kohana::$config->load('monitors')->as_array();
+		
+		// Берем значение
+		$wsEnabled = isset($config['websocket']['enabled']) ? (bool)$config['websocket']['enabled'] : false;
+		
+				
+		if ($wsEnabled && class_exists('Helper_WebSocket')) {
+			$wsAvailable = Helper_WebSocket::isAvailable();
+		} else {
+			$wsAvailable = false;
+		}
+		
+		$this->template->content = View::factory('list')
+			->bind('alert', $fl)
+			->bind('ws_available', $wsAvailable)
+			->bind('ws_enabled', $wsEnabled);
+	}
     
     /**
      * API получения событий в реальном времени

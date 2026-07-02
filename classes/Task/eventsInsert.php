@@ -3,69 +3,70 @@
 class Task_EventsInsert extends Minion_Task {
     
     protected $_options = array(
-        'count'  => 10,   // РєРѕР»РёС‡РµСЃС‚РІРѕ С†РёРєР»РѕРІ
-        'delay'  => 2,    // РёРЅС‚РµСЂРІР°Р» РІ СЃРµРєСѓРЅРґР°С… РјРµР¶РґСѓ РІСЃС‚Р°РІРєР°РјРё
-        'type'   => 27,   // С‚РёРї СЃРѕР±С‹С‚РёСЏ
-        'people' => 1,    // ID С‡РµР»РѕРІРµРєР°
-        'note'   => '17 building test', // С‚РµРєСЃС‚ Р·Р°РјРµС‚РєРё
+        'count'  => 10,   // количество циклов
+        'delay'  => 2,    // интервал в секундах между вставками
+        'type'   => 27,   // тип события
+        'people' => 1,    // ID человека
+        'note'   => '17 building test', // текст заметки
     );
     
     protected function _execute(array $params) 
     {
-        // РџРѕР»СѓС‡Р°РµРј РїР°СЂР°РјРµС‚СЂС‹ СЃ Р·РЅР°С‡РµРЅРёСЏРјРё РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ (PHP 5.6 СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚СЊ)
+        // Получаем параметры с значениями по умолчанию (PHP 5.6 совместимость)
         $count = isset($params['count']) ? (int)$params['count'] : 10;
         $delay = isset($params['delay']) ? (int)$params['delay'] : 2;
         $type = isset($params['type']) ? (int)$params['type'] : 27;
         $people = isset($params['people']) ? (int)$params['people'] : 1;
         $note = isset($params['note']) ? $params['note'] : '17 building test';
         
-        // Р­РєСЂР°РЅРёСЂСѓРµРј note РґР»СЏ Р±РµР·РѕРїР°СЃРЅРѕСЃС‚Рё
+        // Экранируем note для безопасности
         $note = addslashes($note);
         
-        echo 'РќР°С‡РёРЅР°РµРј РІСЃС‚Р°РІРєСѓ ' . $count . ' СЃРѕР±С‹С‚РёР№ СЃ РёРЅС‚РµСЂРІР°Р»РѕРј ' . $delay . ' СЃРµРє.' . "\n";
-        Kohana::$log->add(Log::INFO, 'Р—Р°РїСѓСЃРє Task_EventsInsert: count=' . $count . ', delay=' . $delay);
+        echo 'Начинаем вставку ' . $count . ' событий с интервалом ' . $delay . ' сек.' . "\n";
+        Kohana::$log->add(Log::INFO, 'Запуск Task_EventsInsert: count=' . $count . ', delay=' . $delay);
         
         $successCount = 0;
         $errorCount = 0;
         
         for ($i = 1; $i <= $count; $i++) {
             try {
-                $sql = "INSERT INTO EVENTS (ID_DB, ID_EVENTTYPE, ID_DEV, ID_PLAN, DATETIME, ID_CARD, NOTE, ID_VIDEO, ID_PEP, ESS1, ESS2)
-                        VALUES (1, {$type}, NULL, NULL, current_timestamp, NULL, '{$note}', NULL, {$people}, NULL, NULL)";
+			//получаю newId. Его потом возвращаю как результат вставки
+				 $newId = DB::query(Database::SELECT, 'SELECT GEN_ID(GEN_EVENT_ID, 1) as gen FROM RDB$DATABASE')->execute(Database::instance('fb'))->get('GEN');
+
        $name='test-'.$i;
-	   $sql="INSERT INTO events (ID_DB,ID_EVENTTYPE,ID_DEV,ID_PLAN,DATETIME,ID_CARD,NOTE,ID_VIDEO,ID_PEP,ESS1,ESS2)
-       VALUES (1,50,574,NULL,current_timestamp,'1484F8001A','{$name}',NULL,NULL,22877, 1);";         
+	   $sql="INSERT INTO events (ID_EVENT, ID_DB,ID_EVENTTYPE,ID_DEV,ID_PLAN,DATETIME,ID_CARD,NOTE,ID_VIDEO,ID_PEP,ESS1,ESS2)
+       VALUES ({$newId},1,50,574,NULL,current_timestamp,'1484F8001A','{$name}',NULL,NULL,22877, 1);";         
                 $result = DB::query(Database::INSERT, $sql)
                     ->execute(Database::instance('fb'));
                 
                 $successCount++;
-                echo '[' . $i . '/' . $count . '] РЎРѕР±С‹С‚РёРµ РґРѕР±Р°РІР»РµРЅРѕ. ID: ' . $result[0] . "\n";
-                Kohana::$log->add(Log::DEBUG, 'РЎРѕР±С‹С‚РёРµ РґРѕР±Р°РІР»РµРЅРѕ. ID: ' . $result[0] . ', С†РёРєР»: ' . $i);
+                echo '[' . $i . '/' . $count . '] Событие добавлено. ID: ' . $newId . "\n";
+                Kohana::$log->add(Log::DEBUG, 'Событие добавлено. ID: ' . $newId. ', цикл: ' . $i);
                 
-                // Р•СЃР»Рё СЌС‚Рѕ РЅРµ РїРѕСЃР»РµРґРЅСЏСЏ РёС‚РµСЂР°С†РёСЏ Рё delay > 0, Р¶РґРµРј
+                // Если это не последняя итерация и delay > 0, ждем
                 if ($i < $count && $delay > 0) {
                     sleep($delay);
                 }
                 
             } catch (Database_Exception $e) {
                 $errorCount++;
-                echo '[' . $i . '/' . $count . '] РћРЁРР‘РљРђ: ' . $e->getMessage() . "\n";
-                Kohana::$log->add(Log::ERROR, 'РћС€РёР±РєР° РІСЃС‚Р°РІРєРё СЃРѕР±С‹С‚РёСЏ (С†РёРєР» ' . $i . '): ' . $e->getMessage());
+                echo '[' . $i . '/' . $count . '] ОШИБКА: ' . $e->getMessage() . "\n";
+                Kohana::$log->add(Log::ERROR, 'Ошибка вставки события (цикл ' . $i . '): ' . $e->getMessage());
                 
-                // Р•СЃР»Рё РїСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР°, С‚РѕР¶Рµ Р¶РґРµРј РїРµСЂРµРґ СЃР»РµРґСѓСЋС‰РµР№ РїРѕРїС‹С‚РєРѕР№
+                // Если произошла ошибка, тоже ждем перед следующей попыткой
                 if ($i < $count && $delay > 0) {
                     sleep($delay);
                 }
             }
         }
         
-        // РС‚РѕРіРѕРІС‹Р№ РѕС‚С‡РµС‚
+        // Итоговый отчет
         echo '=====================================' . "\n";
-        echo 'Р’СЃС‚Р°РІРєР° Р·Р°РІРµСЂС€РµРЅР°!' . "\n";
-        echo 'РЈСЃРїРµС€РЅРѕ: ' . $successCount . ' СЃРѕР±С‹С‚РёР№' . "\n";
-        echo 'РћС€РёР±РѕРє: ' . $errorCount . ' СЃРѕР±С‹С‚РёР№' . "\n";
+        echo 'Вставка завершена!' . "\n";
+        echo 'Успешно: ' . $successCount . ' событий' . "\n";
+        echo 'Ошибок: ' . $errorCount . ' событий' . "\n";
         echo '=====================================' . "\n";
         
-        Kohana::$log->add(Log::INFO, 'Task_EventsInsert Р·Р°РІРµСЂС€РµРЅ. РЈСЃРїРµС€РЅРѕ: ' . $successCount . ', РћС€РёР±РѕРє: ' . $errorCount);
+        Kohana::$log->add(Log::INFO, 'Task_EventsInsert завершен. Успешно: ' . $successCount . ', Ошибок: ' . $errorCount);
     }
 }
