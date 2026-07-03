@@ -12,82 +12,152 @@ class Controller_monitors extends Controller_Template {
     }
 
     /**
-     * Ğ“Ğ»Ğ°Ğ²Ğ½Ğ°Ñ ÑÑ‚Ñ€Ğ°Ğ½Ğ¸Ñ†Ğ° Ğ¼Ğ¾Ğ½Ğ¸Ñ‚Ğ¾Ñ€Ğ°
+     * Ãëàâíàÿ ñòğàíèöà ìîíèòîğà
      * URL: /monitors
      */
-	// Ğ’ monitors/classes/controller/monitors.php
-	public function action_index()
-	{
-		$fl = $this->session->get('alert');
-		$this->session->delete('alert');
-		
-		// ĞŸĞ¾Ğ»ÑƒÑ‡Ğ°ĞµĞ¼ ĞºĞ¾Ğ½Ñ„Ğ¸Ğ³ ĞºĞ°Ğº Ğ¼Ğ°ÑÑĞ¸Ğ²
-		$config = Kohana::$config->load('monitors')->as_array();
-		
-		// Ğ‘ĞµÑ€ĞµĞ¼ Ğ·Ğ½Ğ°Ñ‡ĞµĞ½Ğ¸Ğµ
-		$wsEnabled = isset($config['websocket']['enabled']) ? (bool)$config['websocket']['enabled'] : false;
-		
-				
-		if ($wsEnabled && class_exists('Helper_WebSocket')) {
-			$wsAvailable = Helper_WebSocket::isAvailable();
-		} else {
-			$wsAvailable = false;
-		}
-		
-		$this->template->content = View::factory('list')
-			->bind('alert', $fl)
-			->bind('ws_available', $wsAvailable)
-			->bind('ws_enabled', $wsEnabled);
-	}
+    public function action_index()
+    {
+        $fl = $this->session->get('alert');
+        $this->session->delete('alert');
+        
+        // Ïîëó÷àåì êîíôèã êàê ìàññèâ
+        $config = Kohana::$config->load('monitors')->as_array();
+        
+        // Áåğåì çíà÷åíèå
+        $wsEnabled = isset($config['websocket']['enabled']) ? (bool)$config['websocket']['enabled'] : false;
+        
+        if ($wsEnabled && class_exists('Helper_WebSocket')) {
+            $wsAvailable = Helper_WebSocket::isAvailable();
+        } else {
+            $wsAvailable = false;
+        }
+        
+        // Ïîëó÷àåì ãğóïïû óñòğîéñòâ
+        $model = new Model_MonitorM();
+        $deviceGroups = $model->getDeviceGroups();
+        
+        // Ïîëó÷àåì âûáğàííóş ãğóïïó èç ñåññèè
+        $selectedGroup = $this->session->get('selected_device_group', 0);
+        
+        $this->template->content = View::factory('list')
+            ->bind('alert', $fl)
+            ->bind('ws_available', $wsAvailable)
+            ->bind('ws_enabled', $wsEnabled)
+            ->bind('device_groups', $deviceGroups)
+            ->bind('selected_group', $selectedGroup);
+    }
     
     /**
-     * API Ğ¿Ğ¾Ğ»ÑƒÑ‡ĞµĞ½Ğ¸Ñ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ğ¹ Ğ² Ñ€ĞµĞ°Ğ»ÑŒĞ½Ğ¾Ğ¼ Ğ²Ñ€ĞµĞ¼ĞµĞ½Ğ¸
-     * URL: /monitors/getEvent?photo=true
+     * API ïîëó÷åíèÿ ñîáûòèé â ğåàëüíîì âğåìåíè
+     * URL: /monitors/getEvent?photo=true&group=1
      */
     public function action_getEvent()
     {
-        // ĞÑ‚ĞºĞ»ÑÑ‡Ğ°ĞµĞ¼ ÑˆĞ°Ğ±Ğ»Ğ¾Ğ½ Ğ´Ğ»Ñ AJAX-Ğ·Ğ°Ğ¿Ñ€Ğ¾ÑĞ¾Ğ²
+        // Îòêëş÷àåì øàáëîí äëÿ AJAX-çàïğîñîâ
         $this->auto_render = false;
         
-        // Ğ£ÑÑ‚Ğ°Ğ½Ğ°Ğ²Ğ»Ğ¸Ğ²Ğ°ĞµĞ¼ Ğ¿Ñ€Ğ°Ğ²Ğ¸Ğ»ÑŒĞ½Ñ‹Ğ¹ Ğ·Ğ°Ğ³Ğ¾Ğ»Ğ¾Ğ²Ğ¾Ğº
+        // Óñòàíàâëèâàåì ïğàâèëüíûé çàãîëîâîê
         $this->response->headers('Content-Type', 'text/html; charset=utf-8');
-        
+  
+//Kohana::$log->add(Log::DEBUG, '62 ' . Debug::vars($_GET)); 
+
         try {
+            // Ïîëó÷àåì ïàğàìåòğû èç çàïğîñà
             $photo = filter_var($this->request->query('photo'), FILTER_VALIDATE_BOOLEAN);
+        
+		   $groupId = (int)$this->request->param('group', 0);
+		   $groupId = (int)Arr::get($_GET, 'group', 0);
+  
+            // Ëîãèğóåì çàïğîñ
+            Kohana::$log->add(Log::DEBUG, '71 action_getEvent: photo=' . ($photo ? 'true' : 'false') . ', group=' . $groupId);
             
-            // Ğ˜ÑĞ¿Ğ¾Ğ»ÑŒĞ·ÑƒĞµĞ¼ Ğ¼Ğ¾Ğ´ĞµĞ»ÑŒ MonitorM
-            $model = new Model_MonitorM();
-            
-            // ĞŸĞ¾Ğ»ÑƒÑ‡Ğ°ĞµĞ¼ ID Ğ¸Ğ· ĞºÑƒĞºĞ¸
-            $id = Cookie::get('id');
-            
-            if ($id === null) {
-                $id = $model->getNextId() - 20;
-                Cookie::set('id', $id);
+            // Ñîõğàíÿåì âûáğàííóş ãğóïïó â ñåññèş
+            if ($groupId > 0) {
+                $this->session->set('selected_device_group', $groupId);
+            } else {
+                $this->session->delete('selected_device_group');
             }
             
-            // ĞŸĞ¾Ğ»ÑƒÑ‡Ğ°ĞµĞ¼ ÑĞ¾Ğ±Ñ‹Ñ‚Ğ¸Ñ
-            $events = $model->getEvents($id, $photo);
+            // Èñïîëüçóåì ìîäåëü MonitorM
+            $model = new Model_MonitorM();
+            
+            // Ïîëó÷àåì ID èç êóêè
+            $id = Cookie::get('id');
+            
+           // Kohana::$log->add(Log::DEBUG, '86 action_getEvent: ID èç êóêè = ' . ($id !== null ? $id : 'null'));
+            
+            if ($id === null) {
+                // Åñëè êóêè íåò, áåğåì ïîñëåäíèå 20 ñîáûòèé
+                $maxId = $model->getNextId() - 1;
+                $id = max(0, $maxId - 20);
+                Cookie::set('id', $id);
+               // Kohana::$log->add(Log::DEBUG, '93 action_getEvent: Óñòàíîâëåí íîâûé ID = ' . $id);
+            }
+            
+            // Ïğèâîäèì ID ê öåëîìó ÷èñëó
+            $id = (int)$id;
+            
+            // Ïîëó÷àåì ñîáûòèÿ ñ ôèëüòğàöèåé ïî ãğóïïå
+            $events = $model->getEvents($id, $photo, 30, $groupId > 0 ? $groupId : null);
+            
+           // Kohana::$log->add(Log::DEBUG, '102 action_getEvent: Íàéäåíî ñîáûòèé = ' . count($events));
             
             if (empty($events)) {
                 $this->response->body('');
                 return;
             }
             
-            // Ğ¤Ğ¾Ñ€Ğ¼Ğ¸Ñ€ÑƒĞµĞ¼ HTML
+            // Ôîğìèğóåì HTML
             $body = '';
             foreach ($events as $event) {
                 $body .= $model->renderEventRow($event, $photo);
             }
             
-            // Ğ¡Ğ¾Ñ…Ñ€Ğ°Ğ½ÑĞµĞ¼ Ğ² ĞºÑƒĞºÑƒ Ğ¼Ğ°ĞºÑĞ¸Ğ¼Ğ°Ğ»ÑŒĞ½Ñ‹Ğ¹ ID
-            Cookie::set('id', $events[0]['ID_EVENT']);
+            // Ñîõğàíÿåì â êóêó ìàêñèìàëüíûé ID
+            $newId = (int)$events[0]['ID_EVENT'];
+            Cookie::set('id', $newId);
+            //Kohana::$log->add(Log::DEBUG, '118 action_getEvent: Îáíîâëåí ID â êóêè = ' . $newId);
             
             $this->response->body($body);
             
         } catch (Exception $e) {
-            Log::instance()->add(Log::ERROR, 'Controller_monitors::action_getEvent: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+           // Kohana::$log->add(Log::ERROR, '123Controller_monitors::action_getEvent: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             $this->response->body('');
+        }
+    }
+    
+    /**
+     * API äëÿ ñîõğàíåíèÿ âûáğàííîé ãğóïïû óñòğîéñòâ
+     * URL: /monitors/setGroup?group=1
+     */
+    public function action_setGroup()
+    {
+        $this->auto_render = false;
+        $this->response->headers('Content-Type', 'application/json; charset=utf-8');
+        
+        try {
+            // Ïîëó÷àåì ïàğàìåòğ group èç çàïğîñà
+            $groupId = (int)$this->request->query('group', 0);
+            
+            Kohana::$log->add(Log::DEBUG, 'action_setGroup: group=' . $groupId);
+            
+            if ($groupId > 0) {
+                $this->session->set('selected_device_group', $groupId);
+            } else {
+                $this->session->delete('selected_device_group');
+            }
+            
+            $this->response->body(json_encode([
+                'success' => true,
+                'group_id' => $groupId
+            ]));
+            
+        } catch (Exception $e) {
+            Kohana::$log->add(Log::ERROR, 'Controller_monitors::action_setGroup: ' . $e->getMessage());
+            $this->response->body(json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]));
         }
     }
 }

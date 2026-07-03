@@ -2,12 +2,20 @@
 <script type="text/javascript" src="js/modal-photo.js"></script>
 <script type="text/javascript">
     // ==========================================
+    // ДИАГНОСТИКА
+    // ==========================================
+    console.log('=== ДИАГНОСТИКА МОНИТОРА ===');
+    console.log('wsEnabled:', <?php echo $ws_enabled ? 'true' : 'false'; ?>);
+    console.log('=== КОНЕЦ ДИАГНОСТИКИ ===');
+    
+    // ==========================================
     // Глобальные настройки
     // ==========================================
     var timeUpdate = 5; // Интервал обновления в секундах (запасной, если WebSocket не работает)
     var windowsCountsetings = 5; // Количество окон с фото
     var API_BASE_URL = 'monitors/getEvent'; // Fallback URL для AJAX
     var wsEnabled = <?php echo $ws_enabled ? 'true' : 'false'; ?>;
+    
     // ==========================================
     // WebSocket настройки
     // ==========================================
@@ -17,6 +25,7 @@
     var wsMaxReconnectAttempts = 10;
     var wsReconnectDelay = 1000; // Начинаем с 1 секунды
     var wsLastEventId = 0; // Последний полученный ID события
+    var ajaxIntervalId = null; // ID интервала AJAX
     
     // ==========================================
     // Подключение к WebSocket
@@ -41,23 +50,44 @@
                 wsReconnectAttempts = 0;
                 wsReconnectDelay = 1000;
                 
+                // Получаем текущую группу устройств
+                var groupSelect = document.getElementById('deviceGroupSelect');
+                var groupId = groupSelect ? groupSelect.value : 0;
+                
                 // Запрашиваем последние события при подключении
                 var lastId = getLastEventId();
                 ws.send(JSON.stringify({
                     action: 'getEvents',
                     lastId: lastId,
-                    photo: document.getElementById('photomonitor') ? document.getElementById('photomonitor').checked : false
+                    photo: document.getElementById('photomonitor') ? document.getElementById('photomonitor').checked : false,
+                    groupId: groupId
                 }));
+                
+                // Обновляем статус
+                document.getElementById('websocketStatus').innerHTML = '✅ WebSocket';
+                document.getElementById('websocketStatus').style.color = '#4CAF50';
+                document.getElementById('websocketStatus').style.background = '#e8f5e9';
             };
             
             ws.onmessage = function(event) {
                 // Получены данные от сервера
                 if (event.data && event.data !== '') {
-                    // Проверяем, не пришло ли JSON-сообщение с ошибкой
+                    // Проверяем, не пришло ли JSON-сообщение с ошибкой или командой
                     try {
                         var jsonData = JSON.parse(event.data);
                         if (jsonData.error) {
                             console.error('❌ Ошибка от сервера:', jsonData.error);
+                            return;
+                        }
+                        if (jsonData.action === 'setGroup') {
+                            console.log('🔄 Группа устройств изменена на:', jsonData.groupId);
+                            // Сбрасываем таблицу
+                            var table = document.getElementById('txtHint');
+                            if (table) {
+                                while (table.rows.length > 0) {
+                                    table.deleteRow(0);
+                                }
+                            }
                             return;
                         }
                     } catch(e) {
@@ -71,6 +101,11 @@
                 console.log('⚠️ WebSocket отключен');
                 wsConnected = false;
                 ws = null;
+                
+                // Обновляем статус
+                document.getElementById('websocketStatus').innerHTML = '⚠️ Отключен';
+                document.getElementById('websocketStatus').style.color = '#ff9800';
+                document.getElementById('websocketStatus').style.background = '#fff3e0';
                 
                 // Автоматическое переподключение с экспоненциальной задержкой
                 if (wsReconnectAttempts < wsMaxReconnectAttempts) {
@@ -120,12 +155,20 @@
     // Обработка новых событий
     // ==========================================
     function handleNewEvents(html) {
-        if (!html || html === '') return;
+        if (!html || html === '') {
+            console.log('Нет новых событий');
+            return;
+        }
+        
+        console.log('Получены новые события, длина HTML:', html.length);
         
         // Поиск элементов
         var table = document.getElementById('txtHint');
         var select = document.getElementById('selectsSize');
-        if (!table || !select) return;
+        if (!table || !select) {
+            console.error('Таблица или селект не найдены');
+            return;
+        }
         
         // Добавить строки к таблице
         table.insertAdjacentHTML('afterbegin', html);
@@ -195,12 +238,42 @@
     // ==========================================
     function switchToAjaxMode() {
         console.log('🔄 Переключение на AJAX-режим');
-        if (window.updateInterval) {
-            clearInterval(window.updateInterval);
+        
+        // Останавливаем WebSocket
+        if (ws) {
+            try {
+                ws.close();
+            } catch(e) {}
+            ws = null;
         }
-        window.updateInterval = setInterval(showUser, timeUpdate * 1000);
-        document.getElementById('websocketStatus').innerHTML = '<?php echo __('monitor.ajax'); ?>';
+        wsConnected = false;
+        
+        // Обновляем статус
+        document.getElementById('websocketStatus').innerHTML = '📡 AJAX';
         document.getElementById('websocketStatus').style.color = '#ff9800';
+        document.getElementById('websocketStatus').style.background = '#fff3e0';
+        
+        // Запускаем AJAX
+        startAjaxInterval();
+    }
+    
+    // ==========================================
+    // Запуск AJAX интервала
+    // ==========================================
+    function startAjaxInterval() {
+        // Останавливаем старый интервал
+        if (ajaxIntervalId) {
+            clearInterval(ajaxIntervalId);
+            ajaxIntervalId = null;
+        }
+        
+        console.log('Запуск AJAX интервала с периодом:', timeUpdate, 'сек');
+        
+        // Первый запрос сразу
+        showUser();
+        
+        // Запускаем интервал
+        ajaxIntervalId = setInterval(showUser, timeUpdate * 1000);
     }
     
     // ==========================================
@@ -218,36 +291,59 @@
     // Функция обновления монитора (AJAX-режим)
     // ==========================================
     function showUser() {
+        console.log('showUser() вызвана, время:', new Date().toLocaleTimeString());
+        
         // Проверка кнопки остановки событий
         var stopCheck = document.getElementById("updatemonitor");
-        if (stopCheck && stopCheck.checked) return;
+        if (stopCheck && stopCheck.checked) {
+            console.log('Монитор остановлен чекбоксом');
+            return;
+        }
         
         // Если WebSocket работает, не используем AJAX
         if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+            console.log('WebSocket активен, AJAX пропущен');
             return;
         }
+        
+        console.log('Выполняется AJAX-запрос...');
         
         // Формирование GET запроса
         var xmlhttp = new XMLHttpRequest();
         var photoneed = document.getElementById("photomonitor") ? document.getElementById("photomonitor").checked : false;
+        var groupId = document.getElementById("deviceGroupSelect") ? document.getElementById("deviceGroupSelect").value : 0;
         
         // Обработка GET запроса
         xmlhttp.onreadystatechange = function() {
-            if (this.readyState === 4 && this.status === 200) {
-                handleNewEvents(this.responseText);
+            if (this.readyState === 4) {
+                if (this.status === 200) {
+                    console.log('AJAX ответ получен, длина:', this.responseText.length);
+                    if (this.responseText && this.responseText !== '') {
+                        handleNewEvents(this.responseText);
+                    } else {
+                        console.log('AJAX ответ пуст');
+                    }
+                } else {
+                    console.error('AJAX ошибка, статус:', this.status, 'статус текст:', this.statusText);
+                }
             }
         };
         
-        var url = API_BASE_URL + '?photo=' + photoneed;
-        xmlhttp.open("GET", url, true);
-        xmlhttp.send();
+        // Добавляем timestamp для предотвращения кэширования
+        var url = API_BASE_URL + '?photo=' + photoneed + '&group=' + groupId + '&t=' + new Date().getTime();
+        console.log('AJAX URL:', url);
+        
+        try {
+            xmlhttp.open("GET", url, true);
+            xmlhttp.send();
+        } catch(e) {
+            console.error('Ошибка при отправке AJAX запроса:', e);
+        }
     }
     
     // ==========================================
-    // Остальные функции (без изменений)
-    // ==========================================
-    
     // Функция для создания модального окна настроек
+    // ==========================================
     function createSettingsModal2() {
         if (document.getElementById('settingsModal')) {
             document.getElementById('settingsModal').style.display = 'block';
@@ -445,10 +541,12 @@
                 photoCheck.checked = photoEnabled;
             }
             
-            if (window.updateInterval) {
-                clearInterval(window.updateInterval);
-                window.updateInterval = setInterval(showUser, timeUpdate * 1000);
+            // Перезапускаем интервал с новым временем
+            if (ajaxIntervalId) {
+                clearInterval(ajaxIntervalId);
+                ajaxIntervalId = null;
             }
+            startAjaxInterval();
             
             showNotification('<?php echo __('monitor.settings_saved'); ?>');
             closeSettingsModal();
@@ -567,19 +665,50 @@
     }
     
     // ==========================================
+    // Сброс монитора (очистка куки и таблицы)
+    // ==========================================
+    function resetMonitor() {
+        console.log('Сброс монитора');
+        // Сбрасываем куку
+        document.cookie = 'id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+        
+        // Очищаем таблицу
+        var table = document.getElementById('txtHint');
+        if (table) {
+            while (table.rows.length > 0) {
+                table.deleteRow(0);
+            }
+        }
+        
+        // Обновляем счетчики
+        updateCounters();
+        
+        // Обновляем события
+        showUser();
+        
+        showNotification('Монитор сброшен');
+    }
+    
+    // ==========================================
     // Инициализация
     // ==========================================
     $(function() {
+        console.log('=== ИНИЦИАЛИЗАЦИЯ МОНИТОРА ===');
+        
         // Инициализация tablesorter
         try {
             $("#tablesorter").tablesorter({ 
                 headers: { 7: {sorter: false}},  
                 widgets: ['zebra']
             });
-        } catch(e) {}
+            console.log('tablesorter инициализирован');
+        } catch(e) {
+            console.log('tablesorter не доступен');
+        }
         
         // Загрузка сохраненных настроек
         loadSettings();
+        console.log('Настройки загружены, timeUpdate =', timeUpdate);
         
         // Обновление времени
         updateTime();
@@ -588,21 +717,85 @@
         // Обновление счетчиков
         setTimeout(updateCounters, 1000);
         
-        // Подключение к WebSocket
-         if (wsEnabled) {
-				// WebSocket включен
-				connectWebSocket();
-			} else {
-				// Используем только AJAX
-				document.getElementById('websocketStatus').innerHTML = '📡 AJAX';
-				document.getElementById('websocketStatus').style.color = '#ff9800';
-			}
+        // ==========================================
+        // WebSocket или AJAX
+        // ==========================================
+        console.log('wsEnabled =', wsEnabled);
         
-     // AJAX интервал всегда работает (как fallback)
-    if (window.updateInterval) {
-        clearInterval(window.updateInterval);
-    }
-    window.updateInterval = setInterval(showUser, timeUpdate * 1000);
+        if (wsEnabled) {
+            // WebSocket включен - пробуем подключиться
+            console.log('Попытка подключения к WebSocket...');
+            connectWebSocket();
+            
+            // AJAX как fallback, если WebSocket не подключился
+            // Запускаем AJAX с задержкой, чтобы дать WebSocket время на подключение
+            setTimeout(function() {
+                // Проверяем, подключился ли WebSocket
+                if (!wsConnected) {
+                    console.log('WebSocket не подключен, используем AJAX');
+                    startAjaxInterval();
+                } else {
+                    console.log('WebSocket подключен, AJAX не используется');
+                }
+            }, 3000);
+        } else {
+            // WebSocket отключен - только AJAX
+            console.log('WebSocket отключен, используем только AJAX');
+            document.getElementById('websocketStatus').innerHTML = '📡 AJAX';
+            document.getElementById('websocketStatus').style.color = '#ff9800';
+            document.getElementById('websocketStatus').style.background = '#fff3e0';
+            
+            startAjaxInterval();
+        }
+        
+        // Обработчик изменения группы устройств
+        $('#deviceGroupSelect').change(function() {
+            var groupId = $(this).val();
+            var photoChecked = $('#photomonitor').prop('checked');
+            
+            console.log('Изменена группа на:', groupId);
+            
+            // Сохраняем выбор через AJAX
+            $.ajax({
+                url: 'monitors/setGroup',
+                data: { group: groupId },
+                type: 'GET',
+                success: function(response) {
+                    try {
+                        var data = JSON.parse(response);
+                        if (data.success) {
+                            // Сброс таблицы
+                            var table = document.getElementById('txtHint');
+                            if (table) {
+                                while (table.rows.length > 0) {
+                                    table.deleteRow(0);
+                                }
+                            }
+                            
+                            // Перезагружаем события
+                            showUser();
+                            
+                            // Если WebSocket активен, отправляем команду смены группы
+                            if (ws && wsConnected) {
+                                ws.send(JSON.stringify({
+                                    action: 'setGroup',
+                                    groupId: groupId
+                                }));
+                            }
+                            
+                            showNotification('Группа устройств изменена');
+                        }
+                    } catch(e) {
+                        console.error('Ошибка сохранения группы:', e);
+                    }
+                },
+                error: function() {
+                    // Если AJAX не работает, просто перезагружаем страницу
+                    window.location.reload();
+                }
+            });
+        });
+        
         // Пробел - остановка событий
         $(document).bind('keypress', function(e) {
             if (e.keyCode == 32) {
@@ -610,6 +803,7 @@
                 if (check) {
                     check.checked = !check.checked;
                     e.preventDefault();
+                    console.log('Монитор остановлен:', check.checked);
                 }
             }
         });
@@ -636,6 +830,8 @@
                 }
             } catch(e) {}
         });
+        
+        console.log('=== ИНИЦИАЛИЗАЦИЯ ЗАВЕРШЕНА ===');
     });
 </script>
 
@@ -802,6 +998,27 @@
         border: 1px solid #4CAF50;
         display: inline-block;
     }
+    
+    /* Стили для выпадающего списка групп */
+    #deviceGroupSelect {
+        padding: 5px 10px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        background-color: white;
+        font-size: 14px;
+        cursor: pointer;
+        min-width: 150px;
+    }
+    
+    #deviceGroupSelect:hover {
+        border-color: #4a90d9;
+    }
+    
+    #deviceGroupSelect:focus {
+        outline: none;
+        border-color: #4a90d9;
+        box-shadow: 0 0 5px rgba(74, 144, 217, 0.3);
+    }
 </style>
 
 <?php 
@@ -837,6 +1054,18 @@ if ($alert) { ?>
     <br class="clear"/>
     <div class="content">
         <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; padding: 5px 0;">
+            <!-- Группы устройств -->
+            <span>Группа:</span>
+            <select id="deviceGroupSelect">
+                <option value="0">Все устройства</option>
+                <?php foreach ($device_groups as $group): ?>
+                    <option value="<?php echo $group['ID_DEVGROUP']; ?>" 
+                        <?php echo ($selected_group == $group['ID_DEVGROUP']) ? 'selected' : ''; ?>>
+                        <?php echo $group['NAME']; ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            
             <span><?php echo __('monitor.rows_count'); ?>:</span>
             <select id="selectsSize">
                 <option value=10>10</option>
@@ -857,6 +1086,19 @@ if ($alert) { ?>
                 transition: background 0.3s;
             " onmouseover="this.style.background='#357abd'" onmouseout="this.style.background='#4a90d9'">
                 ⚙️ <?php echo __('monitor.settings'); ?>
+            </button>
+            
+            <button onclick="resetMonitor()" style="
+                background: #ff9800;
+                color: white;
+                border: none;
+                padding: 5px 15px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+                transition: background 0.3s;
+            " onmouseover="this.style.background='#e68900'" onmouseout="this.style.background='#ff9800'">
+                🔄 Сброс
             </button>
             
             <span><?php echo __('monitor.stop'); ?>:</span>

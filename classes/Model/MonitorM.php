@@ -19,47 +19,52 @@ class Model_MonitorM extends Model
         return (int)$query['GEN_ID'];
     }
     
-    /**
-     * Получение событий с ID больше указанного
-     * @param int $id - ID события, начиная с которого выбирать
-     * @param bool $withPhoto - нужно ли загружать фото
-     * @param int $limit - количество записей
-     * @return array
-     */
-    public function getEvents($id, $withPhoto = false, $limit = 30)
-    {
-        $sqlphoto = $withPhoto ? 'p.photo,' : '';
-        
-        $sql = 'SELECT FIRST ' . (int)$limit . ' 
-            e.id_event, 
-            e.id_eventtype, 
-            e.datetime, 
-            et.color, 
-            et.name as eventtype_name, 
-            d.name as device_name, 
-            p.surname, 
-            p.surname||\' \'|| p.name||\' \'|| p.patronymic as people_name,
-            ' . $sqlphoto . ' 
-            p.post, 
-            o.name as organization_name
-        FROM device d
-        JOIN events e ON e.id_dev = d.id_dev
-        JOIN eventtype et ON et.id_eventtype = e.id_eventtype
-        LEFT JOIN people p ON p.id_pep = e.ess1
-        LEFT JOIN organization o ON o.id_org = e.ess2
-        WHERE e.id_event > '.$id.'
-        ORDER BY e.id_event DESC';
-		
- //Kohana::$log->add(Log::DEBUG, '52 id='.$id);  
- //Kohana::$log->add(Log::DEBUG, '53 sql '.$sql);  
- 
-        $query = DB::query(Database::SELECT, $sql)
-            ->parameters(array(':id' => (int)$id))
-            ->execute(Database::instance('fb'))
-            ->as_array();
-        
-        return $query;
+   /**
+ * Получение событий с ID больше указанного
+ * @param int $id - ID события, начиная с которого выбирать
+ * @param bool $withPhoto - нужно ли загружать фото
+ * @param int $limit - количество записей
+ * @param int|null $deviceGroupId - ID группы устройств для фильтрации (null = все)
+ * @return array
+ */
+public function getEvents($id, $withPhoto = false, $limit = 30, $deviceGroupId = null)
+{
+    $sqlphoto = $withPhoto ? 'p.photo,' : '';
+    
+  	
+	 $sql = 'SELECT FIRST ' . (int)$limit . ' 
+        e.id_event, 
+        e.id_eventtype, 
+        e.datetime, 
+        et.color, 
+        et.name as eventtype_name, 
+        d.name as device_name, 
+        p.surname, 
+        p.surname||\' \'|| p.name||\' \'|| p.patronymic as people_name,
+         ' . $sqlphoto . '  
+        p.post, 
+        o.name as organization_name
+    FROM device d
+    JOIN events e ON e.id_dev = d.id_dev
+    JOIN eventtype et ON et.id_eventtype = e.id_eventtype
+    LEFT JOIN people p ON p.id_pep = e.ess1
+    LEFT JOIN organization o ON o.id_org = e.ess2';
+    
+    // Добавляем фильтрацию по группе устройств, если указана
+    if ($deviceGroupId !== null && $deviceGroupId > 0) {
+     //   $sql .= ' JOIN DEVGROUP dg ON dg.ID_DEV = d.id_dev AND dg.ID_DEVGROUP = ' . (int)$deviceGroupId;
+        $sql .= '  join  DEVGROUP_GETCHILD(1,'.(int)$deviceGroupId.') dg on e.id_dev=dg.id_dev ';
     }
+    
+    $sql .= ' WHERE e.id_event > ' . (int)$id . '
+        ORDER BY e.id_event DESC';
+Kohana::$log->add(Log::ERROR, '59 getEvents '.$sql);           
+    $query = DB::query(Database::SELECT, $sql)
+        ->execute(Database::instance('fb'))
+        ->as_array();
+    
+    return $query;
+}
     
     /**
      * Получение одного события по ID
@@ -223,4 +228,30 @@ class Model_MonitorM extends Model
         
         return false;
     }
+	
+	
+	/**
+ * Получение групп устройств (только верхний уровень, id_parent=1)
+ * @return array
+ */
+public function getDeviceGroups()
+{
+    $sql = 'SELECT ID_DEVGROUP, NAME 
+            FROM DEVGROUP 
+            WHERE ID_PARENT = 1 
+            ORDER BY NAME';
+    
+    $query = DB::query(Database::SELECT, $sql)
+        ->execute(Database::instance('fb'))
+        ->as_array();
+    
+    // Конвертация кодировки для имен групп
+    foreach ($query as &$row) {
+        if (isset($row['NAME'])) {
+            $row['NAME'] = iconv('CP1251', 'UTF-8//IGNORE', $row['NAME']);
+        }
+    }
+    
+    return $query;
+}
 }

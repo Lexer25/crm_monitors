@@ -9,13 +9,21 @@ Kohana::$config->load('menu')
         'order' => 3,
     ));
 
-// Маршруты для монитора событий
+// Маршрут для сохранения группы устройств
+Route::set('monitors_set_group', 'monitors/setGroup', array())
+    ->defaults(array(
+        'controller' => 'monitors',
+        'action' => 'setGroup',
+    ));
+
+// Маршрут для API получения событий
 Route::set('monitors_api', 'monitors/getEvent', array())
     ->defaults(array(
         'controller' => 'monitors',
         'action' => 'getEvent',
     ));
 
+// Главный маршрут
 Route::set('monitors', 'monitors(/<action>)', array('action' => 'index'))
     ->defaults(array(
         'controller' => 'monitors',
