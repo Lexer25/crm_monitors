@@ -1,5 +1,4 @@
-<script type="text/javascript" src="js/modal-window.js"></script>
-<script type="text/javascript" src="js/modal-photo.js"></script>
+
 <script type="text/javascript">
     // ==========================================
     // ДИАГНОСТИКА
