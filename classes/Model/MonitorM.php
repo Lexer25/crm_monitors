@@ -35,6 +35,8 @@ public function getEvents($id, $withPhoto = false, $limit = 30, $deviceGroupId =
 	 $sql = 'SELECT FIRST ' . (int)$limit . ' 
         e.id_event, 
         e.id_eventtype, 
+		e.id_card,
+        e.analit,
         e.datetime, 
         et.color, 
         et.name as eventtype_name, 
@@ -79,6 +81,8 @@ Kohana::$log->add(Log::ERROR, '59 getEvents '.$sql);
         $sql = 'SELECT 
             e.id_event, 
             e.id_eventtype, 
+			e.id_card,
+        e.analit,
             e.datetime, 
             et.color, 
             et.name as eventtype_name, 
@@ -171,6 +175,7 @@ Kohana::$log->add(Log::ERROR, '59 getEvents '.$sql);
             $device_name = isset($event['DEVICE_NAME']) ? iconv('CP1251', 'UTF-8//IGNORE', $event['DEVICE_NAME']) : '';
             $people_name = isset($event['PEOPLE_NAME']) ? iconv('CP1251', 'UTF-8//IGNORE', $event['PEOPLE_NAME']) : '';
             $organization_name = isset($event['ORGANIZATION_NAME']) ? iconv('CP1251', 'UTF-8//IGNORE', $event['ORGANIZATION_NAME']) : '';
+            $id_card = isset($event['ID_CARD']) ? $event['ID_CARD'] : '';
             
             // Фото
             $bodyphoto = '';
@@ -191,7 +196,7 @@ Kohana::$log->add(Log::ERROR, '59 getEvents '.$sql);
                 <td style="' . $style . '">' . $event['DATETIME'] . '</td>
                 <td id="even_name" style="' . $style . '">' . $eventtype_name . '</td>
                 <td id="device_name" style="' . $style . '">' . $device_name . '</td>
-                <td id="people_name" style="' . $style . '">' . $people_name . '</td>
+                <td id="people_name" style="' . $style . '">' . $people_name . '('.$id_card.')</td>
                 <td id="org_name" style="' . $style . '">' . $organization_name . '</td>
             </tr>';
             
