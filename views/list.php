@@ -1112,7 +1112,9 @@ if ($alert) { ?>
         </div>
         
         <form id="form_data" name="form_data" action="" method="post">
-            <table class="data tablesorter-blue" width="100%" cellpadding="0" cellspacing="0" id="tablesorter">
+		<!--Таблица журнала событий онлайн -->
+		<!-- сотртировка отключена, id="tablesorter" заменен на id="_tablesorter" -->
+            <table class="data tablesorter-blue" width="100%" cellpadding="0" cellspacing="0" id="_tablesorter">
                 <thead>
                     <tr>
                         <th><?php echo __('monitor.id_event'); ?></th>
@@ -1122,6 +1124,7 @@ if ($alert) { ?>
                         <th><?php echo __('monitor.device_name'); ?></th>
                         <th><?php echo __('monitor.people_name'); ?></th>
                         <th><?php echo __('monitor.organization_name'); ?></th>
+                        <th><?php echo __('Код аналитики'); ?></th>
                     </tr>
                 </thead>     
                 <tbody id="txtHint"></tbody>

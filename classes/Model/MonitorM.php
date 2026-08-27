@@ -168,7 +168,7 @@ Kohana::$log->add(Log::ERROR, '59 getEvents '.$sql);
         try {
             $color = isset($event['COLOR']) ? dechex($event['COLOR']) : 'FFFFFF';
             $style = 'color: black; background-color: #' . str_pad($color, 6, '0', STR_PAD_LEFT) . ';';
-            
+    
             // Конвертация кодировок
             $post = isset($event['POST']) ? iconv('CP1251', 'UTF-8//IGNORE', $event['POST']) : '';
             $eventtype_name = isset($event['EVENTTYPE_NAME']) ? iconv('CP1251', 'UTF-8//IGNORE', $event['EVENTTYPE_NAME']) : '';
@@ -196,8 +196,9 @@ Kohana::$log->add(Log::ERROR, '59 getEvents '.$sql);
                 <td style="' . $style . '">' . $event['DATETIME'] . '</td>
                 <td id="even_name" style="' . $style . '">' . $eventtype_name . '</td>
                 <td id="device_name" style="' . $style . '">' . $device_name . '</td>
-                <td id="people_name" style="' . $style . '">' . $people_name . '('.$id_card.')</td>
+                <td id="people_name" style="' . $style . '">' . $people_name . ' ('.$id_card.')</td>
                 <td id="org_name" style="' . $style . '">' . $organization_name . '</td>
+                <td id="analyt" style="' . $style . '">'.$event['ANALIT'].' <abbr title="'.Kohana::message('analyt_code', $event['ANALIT'].'.recommendation', 'Нет') .'">'.Kohana::message('analyt_code', $event['ANALIT'].'.desc', 'Нет').'</abbr></td>
             </tr>';
             
         } catch (Exception $e) {

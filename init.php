@@ -1,5 +1,5 @@
 <?php
-defined('MONITORS_VERSION') OR define('MONITORS_VERSION', '1.0.3');
+defined('MONITORS_VERSION') OR define('MONITORS_VERSION', '1.0.4');
 
 Kohana::$config->load('menu')
     ->set('monitors', array(
