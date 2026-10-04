@@ -143,18 +143,27 @@ Kohana::$log->add(Log::ERROR, '59 getEvents '.$sql);
             ? 'current_timestamp' 
             : "'" . $data['datetime'] . "'";
         
+        // Firebird: id события получаем генератором. Конструкция RETURNING
+        // здесь не работает — Database_PDO (модуль basis) не возвращает id
+        // вставки, т.к. драйвер Gemini InterBase ODBC не поддерживает
+        // lastInsertId(). Тот же приём применён в этом же модуле:
+        // classes/Task/eventsInsert.php и строка 15 этого файла.
+        $new_id = DB::query(Database::SELECT, 'SELECT GEN_ID(GEN_EVENT_ID, 1) as gen FROM RDB$DATABASE')
+            ->execute(Database::instance('fb'))
+            ->get('GEN');
+
         $sql = "INSERT INTO events (
-            ID_DB, ID_EVENTTYPE, ID_DEV, ID_PLAN, DATETIME, 
+            ID_EVENT, ID_DB, ID_EVENTTYPE, ID_DEV, ID_PLAN, DATETIME, 
             ID_CARD, NOTE, ID_VIDEO, ID_PEP, ESS1, ESS2
         ) VALUES (
-            {$data['id_db']}, {$data['id_eventtype']}, {$data['id_dev']}, {$id_plan}, {$datetime},
+            {$new_id}, {$data['id_db']}, {$data['id_eventtype']}, {$data['id_dev']}, {$id_plan}, {$datetime},
             {$id_card}, '{$note}', {$id_video}, {$id_pep}, {$ess1}, {$ess2}
-        ) RETURNING ID_EVENT";
-        
-        $result = DB::query(Database::INSERT, $sql)
+        )";
+
+        DB::query(Database::INSERT, $sql)
             ->execute(Database::instance('fb'));
-        
-        return isset($result[0]) ? (int)$result[0] : null;
+
+        return (int) $new_id;
     }
     
     /**

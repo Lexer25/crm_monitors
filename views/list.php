@@ -687,6 +687,33 @@
         
         showNotification('Монитор сброшен');
     }
+	
+	// ==========================================
+	// Очистка экрана (удаление всех событий)
+	// ==========================================
+	function clearScreen() {
+		console.log('Очистка экрана');
+		
+		// Очищаем таблицу
+		var table = document.getElementById('txtHint');
+		if (table) {
+			while (table.rows.length > 0) {
+				table.deleteRow(0);
+			}
+		}
+		
+		// Удаляем все модальные окна с фото
+		var modals = document.querySelectorAll('.modal');
+		for (var i = 0; i < modals.length; i++) {
+			modals[i].remove();
+		}
+		
+		// Обновляем счетчики
+		updateCounters();
+		
+		// Показываем уведомление
+		showNotification('Экран очищен');
+	}
     
     // ==========================================
     // Инициализация
@@ -1099,6 +1126,19 @@ if ($alert) { ?>
             " onmouseover="this.style.background='#e68900'" onmouseout="this.style.background='#ff9800'">
                 🔄 Сброс
             </button>
+<!-- Очистка экрана -->
+			<button onclick="clearScreen()" style="
+				background: #f44336;
+				color: white;
+				border: none;
+				padding: 5px 15px;
+				border-radius: 4px;
+				cursor: pointer;
+				font-weight: bold;
+				transition: background 0.3s;
+			" onmouseover="this.style.background='#d32f2f'" onmouseout="this.style.background='#f44336'">
+				🗑️ Очистить экран
+			</button>
             
             <span><?php echo __('monitor.stop'); ?>:</span>
             <input type="checkbox" id="updatemonitor" title="<?php echo __('monitor.stop'); ?>"/>
